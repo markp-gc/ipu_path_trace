@@ -33,8 +33,8 @@ const std::vector<std::string> packetTypes{
                     // for render preview (server -> client)
 };
 
-// Struct and serialize function to telemetry
-// in a single packet over comms system:
+// Struct and serialize function to send
+// telemetry in a single packet:
 struct SamplesRates {
   float pathRate;
   float rayRate;
@@ -44,6 +44,8 @@ template <typename T>
 void serialize(T& ar, SamplesRates& s) { ar(s.pathRate, s.rayRate); }
 
 } // end anonymous namespace
+
+using namespace std::chrono_literals;
 
 class InterfaceServer {
 
@@ -122,7 +124,9 @@ class InterfaceServer {
 
       ipu_utils::logger()->info("User interface server entering Tx/Rx loop.");
       serverReady = true;
-      while (!stopServer && receiver.ok()) {}
+      while (!stopServer && receiver.ok()) {
+        std::this_thread::sleep_for(5ms);
+      }
     }
     ipu_utils::logger()->info("User interface server Tx/Rx loop exited.");
   }
@@ -130,7 +134,6 @@ class InterfaceServer {
   /// Wait until server has initialised everything and enters its main loop:
   void waitForServerReady() {
     while (!serverReady) {
-      using namespace std::chrono_literals;
       std::this_thread::sleep_for(5ms);
     }
   }
