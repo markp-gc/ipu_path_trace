@@ -1,6 +1,6 @@
 # Monte-Carlo Path Tracing on Graphcore IPUs
 
-![Example output image](images/example.png)
+![Example output image](images/example.png "Spheres with neural environment lighting path-traced on IPU.")
 
 This is an experimental physically based renderer, it is experimental/novel in a few different ways:
 - Executes on Graphcore IPUs (which are not nominally designed for rendering).
@@ -54,7 +54,7 @@ Now we can launch the container:
 gc-docker -- -it --rm --name "$USER"_ipu_docker -v $USER-path-trace-data:/home/ubuntu/ --tmpfs /tmp:exec -v ~/.ipuof.conf.d:/etc/ipuof.conf.d/ ipu_path_trace/dev
 ```
 
-(For remote development in the container Visual Studio Code with [remote development extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack) is recommended).
+(For remote development in the container Visual Studio Code with the official [remote development extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack) is recommended).
 
 ### Build the Application
 
@@ -94,7 +94,7 @@ The trained keras model contains a subfolder called `assets.extra`, give that pa
 
 ## Remote User Interface
 
-The application supports a remote user interface that allows you to change render settings and interactively preview the results. This is available in a separate repository here: [Remote-UI](). If you specify a port in the path tracer options e.g. `--ui-port 5000` set then the application will wait for the remote-ui to connect (after graph compilation/load). You will need to forward a the specified port to your local machine so the UI can connect e.g.:
+The application supports a remote user interface that allows you to change render settings and interactively preview the results. This is available in a separate repository here: [Remote-UI](). If you specify a port in the path tracer options e.g. `--ui-port 5000` then the application will wait for the remote-ui to connect (after graph compilation/load). You will need to forward the specified port to your local machine so the UI can connect e.g.:
 
 ```
 ssh -NL 5000:localhost:5000 <hostname-of-ipu-head-node>
