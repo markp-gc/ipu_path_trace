@@ -79,13 +79,14 @@ The renderer saves low and high dynamic range outputs intermittently (`--save-in
 
 ## Train your own Environment Lighting Network
 
-The neural environment light uses a neural image field (NIF) network. These are MLP based image approximators and are trained using Graphcore's NIF implementation: [NIF Training Scripts](https://github.com/graphcore/examples/tree/master/code_examples/tensorflow2/neural_image_fields). Follow the instructions there to setup a virtual env inside your docker container.
+The neural environment light uses a neural image field (NIF) network. These are MLP based image approximators and are trained using Graphcore's NIF implementation: [NIF Training Scripts](https://github.com/graphcore/examples/tree/master/code_examples/tensorflow2/neural_image_fields). *Follow the instructions there to setup a virtual env inside your docker container.*
 
 Next you will need to source an equirectangular-projection HDRI image (e.g. those found here are suitable: [HDRIs](https://polyhaven.com/hdris)). Download a 2k or 4k image and pass this to the NIF traning script. You can play with the hyper parameters but the parameters below are a balanced compromise between size, computational cost and quality:
 
 ```
 git clone https://github.com/graphcore/examples.git
 cd examples/code_examples/tensorflow2/neural_image_fields
+pip install -r requirements.txt
 python3 train_nif.py --train-samples 8000000 --epochs 1000 --callback-period 100 --fp16 --loss-scale 16384 --color-space yuv --layer-count 6 --layer-size 320 --batch-size 1024 --callback-period 100 --embedding-dimension 12 --input input_hdri.exr --model nif_models/output_nif_fp16_yuv
 ```
 
