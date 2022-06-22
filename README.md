@@ -37,7 +37,9 @@ Additionally, if it has not been configured for you, you must also setup your IP
 Poplar SDK version support:
 
 | SDK Version | Supported |
-| 2.5 and below | Single IPU only |
+|-|-|
+|< 2.5| No |
+| 2.5 | Limited - Single IPU only |
 | 2.6 | Yes |
 
 ### Build a Docker Image
