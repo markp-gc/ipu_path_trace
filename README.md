@@ -73,7 +73,7 @@ This should build all the submodules and the application.
 
 The application needs a neural HDRI model to run. There is an example included in the repository that you can try:
 ```
-./ipu_trace --assets ../nif_models/urban_alley_01_4k_fp16_yuv/assets.extra/ -w 882 -h 720 --tile-width 18 --tile-height 12 -s 100000 --samples-per-step 300 --ipus 2 --defer-attach -o image.png --save-interval 10 --save-exe pt_graph
+./ipu_trace --assets ../nif_models/urban_alley_01_4k_fp16_yuv/assets.extra/ -w 792 -h 720 --tile-width 22 --tile-height 18 -s 100000 --samples-per-step 300 --ipus 1 --defer-attach -o image.png --save-interval 10 --save-exe pt_graph
 ```
 The renderer saves low and high dynamic range outputs intermittently (`--save-interval`) in this case: `image.png` and `image.exr`.
 
