@@ -235,6 +235,7 @@ PathTracerApp::buildNifReplicas(poplar::Graph& g, poplar::Tensor uvInput) {
   std::vector<poplar::Tensor> shardResults;
   poplar::program::Sequence initAllNifs;
   poplar::program::Sequence execAllNifs;
+
   for (std::size_t s = 0u; s < graphs.size(); ++s) {
     // Split the UVs into per chip chunks:
     std::size_t startTile = s * tilesPerIpu;
@@ -247,7 +248,11 @@ PathTracerApp::buildNifReplicas(poplar::Graph& g, poplar::Tensor uvInput) {
     poplar::Tensor result;
     poplar::program::Sequence initNifModel;
     poplar::program::Sequence execNifModel;
+#ifdef NO_VIRTUAL_GRAPHS
+    std::tie(initNifModel, execNifModel) = buildEnvironmentNif(g, models[s], ipuSlice, result);
+#else
     std::tie(initNifModel, execNifModel) = buildEnvironmentNif(graphs[s], models[s], ipuSlice, result);
+#endif
     shardResults.push_back(result);
     ipu_utils::logger()->debug("Shard result shape in IPU {}: {}", s, result.shape());
     initAllNifs.add(initNifModel);

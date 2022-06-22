@@ -17,6 +17,13 @@ add_compile_options(-Wall -Wextra -Werror -Wno-unused-parameter -Wno-ignored-qua
 set(CMAKE_CXX_FLAGS_DEBUG "-g -Og")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
+execute_process(COMMAND bash "-c" "popc --version | cut -d ' ' -f3 | head -1" OUTPUT_VARIABLE POPLAR_VERSION)
+# With Poplar SDK 2.5.0 we need to disable virtual graphs due to an SDK bug:
+if(${POPLAR_VERSION} MATCHES "2.5.?")
+  message(WARNING "Poplar version 2.5.x detected. Enabling workaround for virtual graph bug.")
+  add_compile_definitions(NO_VIRTUAL_GRAPHS)
+endif(${POPLAR_VERSION} MATCHES "2.5.?")
+
 file(GLOB IPU_TRACE_SRC ${CMAKE_SOURCE_DIR}/src/*.hpp ${CMAKE_SOURCE_DIR}/src/*.cpp)
 
 message(STATUS "LIBRARY: ${HDF5_LIBRARIES}")

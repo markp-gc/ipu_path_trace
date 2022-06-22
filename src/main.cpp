@@ -48,6 +48,15 @@ boost::program_options::variables_map parseOptions(int argc, char** argv, boost:
 
   po::notify(vm);
 
+#ifdef NO_VIRTUAL_GRAPHS
+  // Defining NO_VIRTUAL_GRAPHS is a work around for a bug
+  // in Poplar SDK 2.5 but it limits us to using 1 IPU:
+  if (vm.at("ipus").as<std::size_t>() > 1) {
+    throw std::logic_error("You have compiled the application with virtual "
+                           "graphs disabled but selected more than 1 IPU.");
+  }
+#endif
+
   // Check options are set correctly:
   auto saveExe = !vm.at("save-exe").as<std::string>().empty();
   auto loadExe = !vm.at("load-exe").as<std::string>().empty();
