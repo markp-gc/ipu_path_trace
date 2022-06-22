@@ -1,0 +1,9 @@
+[submodule "external/light"]
+	path = external/light
+	url = https://github.com/mpups/light.git
+[submodule "external/packetcomms"]
+	path = external/packetcomms
+	url = https://github.com/mpups/packetcomms.git
+[submodule "external/videolib"]
+	path = external/videolib
+	url = https://github.com/markp-gc/videolib.git
