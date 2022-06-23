@@ -96,7 +96,7 @@ The trained keras model contains a subfolder called `assets.extra`, give that pa
 
 ## Remote User Interface
 
-The application supports a remote user interface that allows you to change render settings and interactively preview the results. This is available in a separate repository here: [Remote-UI](https://github.com/markp-gc/remote-ui). If you specify a port in the path tracer options e.g. `--ui-port 5000` then the application will wait for the remote-ui to connect (after graph compilation/load). You will need to forward the specified port to your local machine so the UI can connect e.g.:
+The application supports a remote user interface that allows you to change render settings and interactively preview the results. This is available in a separate repository here: [remote render user interface](https://github.com/markp-gc/remote_render_ui). If you specify a port in the path tracer options e.g. `--ui-port 5000` then the application will wait for the remote-ui to connect (after graph compilation/load). You will need to forward the specified port to your local machine so the UI can connect e.g.:
 
 ```
 ssh -NL 5000:localhost:5000 <hostname-of-ipu-head-node>
