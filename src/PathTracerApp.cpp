@@ -79,7 +79,7 @@ void PathTracerApp::init(const boost::program_options::variables_map& options) {
   pvti::Tracepoint::begin(&traceChannel, "create_path_tracing_jobs");
   traceJobs = createTracingJobs(
     imageWidth, imageHeight, tileWidth, tileHeight, samplesPerIpuStep, seed);
-  ipu_utils::logger()->info("Image contains {} tiles", traceJobs.size());
+  ipu_utils::logger()->info("Graph uses {} tiles", traceJobs.size());
 
   ipuJobs.reserve(traceJobs.size());
   for (auto c = 0u; c < traceJobs.size(); ++c) {
