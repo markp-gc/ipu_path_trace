@@ -4,22 +4,22 @@
 
 #include <vector>
 
-#include <poplar/Graph.hpp>
 #include <poplar/Engine.hpp>
-#include <poprand/RandomGen.hpp>
+#include <poplar/Graph.hpp>
 #include <popops/ElementWise.hpp>
 #include <popops/Fill.hpp>
 #include <popops/Reduce.hpp>
-#include <poprand/codelets.hpp>
 #include <popops/codelets.hpp>
+#include <poprand/RandomGen.hpp>
+#include <poprand/codelets.hpp>
 
-#include <light/src/light.hpp>
 #include <light/src/jobs.hpp>
+#include <light/src/light.hpp>
 
 #include "codelets/TraceRecord.hpp"
 
-#include "ipu_utils.hpp"
 #include "io_utils.hpp"
+#include "ipu_utils.hpp"
 
 #include <boost/program_options.hpp>
 
@@ -27,8 +27,7 @@ using Interval = std::pair<std::size_t, std::size_t>;
 
 /// Compute the start and end indices that can be used to slice the
 /// tile's pixels into chunks that each worker will process:
-std::vector<Interval> splitTilePixelsOverWorkers(std::size_t rows, std::size_t cols,
-                                                 std::size_t workers) {
+std::vector<Interval> splitTilePixelsOverWorkers(std::size_t rows, std::size_t cols, std::size_t workers) {
   const auto rowsPerWorker = rows / workers;
   const auto leftOvers = rows % workers;
   std::vector<std::size_t> work(workers, rowsPerWorker);
@@ -69,12 +68,10 @@ poplar::Tensor IpuPathTraceJob::addScalar(poplar::Graph& graph, poplar::VertexRe
 IpuPathTraceJob::~IpuPathTraceJob() {}
 
 IpuPathTraceJob::IpuPathTraceJob(TraceTileJob& spec,
-                const boost::program_options::variables_map& args,
-                std::size_t core)
-:
-  jobSpec(spec),
-  ipuCore(core)
-{}
+                                 const boost::program_options::variables_map& args,
+                                 std::size_t core)
+    : jobSpec(spec),
+      ipuCore(core) {}
 
 void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
                                  const InputMap& inputs,
@@ -82,15 +79,15 @@ void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
                                  const boost::program_options::variables_map& args) {
   const auto prefix = jobStringPrefix();
 
-  auto genRays = cs.at("gen-rays");  
+  auto genRays = cs.at("gen-rays");
   rayGenVertex = graph.addVertex(genRays, "GenerateCameraRays");
-  graph.setPerfEstimate(rayGenVertex, 1); // Fake perf estimate (for IpuModel only).
+  graph.setPerfEstimate(rayGenVertex, 1);  // Fake perf estimate (for IpuModel only).
 
   auto traceBuffer = inputs.at("tracebuffer");
   auto cameraRays = inputs.at("primary-rays");
   graph.connect(rayGenVertex["rays"], cameraRays);
   graph.connect(rayGenVertex["traceBuffer"], traceBuffer);
-  auto imageWidth  = args.at("width").as<std::uint32_t>();
+  auto imageWidth = args.at("width").as<std::uint32_t>();
   auto imageHeight = args.at("height").as<std::uint32_t>();
   addScalarConstant<unsigned>(graph, rayGenVertex, "imageWidth", poplar::UNSIGNED_INT, imageWidth);
   addScalarConstant<unsigned>(graph, rayGenVertex, "imageHeight", poplar::UNSIGNED_INT, imageHeight);
@@ -99,7 +96,7 @@ void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
   poplar::Tensor aaScaleTensor = inputs.at("aa-scale");
   poplar::Tensor fovTensor = inputs.at("fov");
   auto localAaScale =
-    graph.addVariable(aaScaleTensor.elementType(), aaScaleTensor.shape(), prefix + "antiAliasScale");
+      graph.addVariable(aaScaleTensor.elementType(), aaScaleTensor.shape(), prefix + "antiAliasScale");
   auto localFov = graph.addVariable(fovTensor.elementType(), fovTensor.shape(), prefix + "fov");
   graph.setTileMapping(localAaScale, ipuCore);
   graph.setTileMapping(localFov, ipuCore);
@@ -109,7 +106,7 @@ void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
   // Make a local copy of azimuthal rotation:
   poplar::Tensor rotation = inputs.at("env-map-rotation");
   auto localRotation =
-    graph.addVariable(rotation.elementType(), rotation.shape(), prefix + "hdri_azimuth");
+      graph.addVariable(rotation.elementType(), rotation.shape(), prefix + "hdri_azimuth");
   graph.setTileMapping(localRotation, ipuCore);
 
   contributionData = inputs.at("path-records");
@@ -125,7 +122,7 @@ void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
   auto traceRecordSize = sizeof(TraceRecord);
 
   const auto intervals = splitTilePixelsOverWorkers(jobSpec.rows(), jobSpec.cols(), workers);
-  for (const auto &interval : intervals) {
+  for (const auto& interval : intervals) {
     tracerVertices.push_back(graph.addVertex(pathTraceCs, "RayTraceKernel"));
     accumulatorVertices.push_back(graph.addVertex(accumulateCs, "AccumulateContributions"));
     auto& v1 = tracerVertices.back();
@@ -206,10 +203,10 @@ void IpuPathTraceJob::setTileMappings(poplar::Graph& graph) {
   graph.setTileMapping(contributionData, ipuCore);
   for (auto& v : tracerVertices) {
     graph.setTileMapping(v, ipuCore);
-    graph.setPerfEstimate(v, 1); // Fake perf estimate (for IpuModel only).
+    graph.setPerfEstimate(v, 1);  // Fake perf estimate (for IpuModel only).
   }
   for (auto& v : accumulatorVertices) {
     graph.setTileMapping(v, ipuCore);
-    graph.setPerfEstimate(v, 1); // Fake perf estimate (for IpuModel only).
+    graph.setPerfEstimate(v, 1);  // Fake perf estimate (for IpuModel only).
   }
 }

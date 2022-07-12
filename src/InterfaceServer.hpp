@@ -6,31 +6,31 @@
 
 #include <PacketComms.h>
 #include <PacketSerialisation.h>
-#include <network/TcpSocket.h>
 #include <VideoLib.h>
+#include <network/TcpSocket.h>
 
+#include <atomic>
 #include <chrono>
 #include <iostream>
-#include <atomic>
 
 #include <cereal/types/string.hpp>
 
 namespace {
 
 const std::vector<std::string> packetTypes{
-  "stop",           // Tell server to stop rendering and exit (client -> server)
-  "detach",         // Detach the remote-ui but continue: server can destroy the
-                    // communication interface and continue (client -> server)
-  "progress",       // Send render progress (server -> client)
-  "sample_rate",    // Send throughput measurement (server -> client)
-  "env_rotation",   // Update environment light rotation (client -> server)
-  "exposure",       // Update tone-map exposure (client -> server)
-  "gamma",          // Update tone-map gamma (client -> server)
-  "fov",            // Update field-of-view (client -> server)
-  "load_nif",       // Insruct server to load a new
-                    // NIF environemnt light (client -> server)
-  "render_preview", // used to send compressed video packets
-                    // for render preview (server -> client)
+    "stop",            // Tell server to stop rendering and exit (client -> server)
+    "detach",          // Detach the remote-ui but continue: server can destroy the
+                       // communication interface and continue (client -> server)
+    "progress",        // Send render progress (server -> client)
+    "sample_rate",     // Send throughput measurement (server -> client)
+    "env_rotation",    // Update environment light rotation (client -> server)
+    "exposure",        // Update tone-map exposure (client -> server)
+    "gamma",           // Update tone-map gamma (client -> server)
+    "fov",             // Update field-of-view (client -> server)
+    "load_nif",        // Insruct server to load a new
+                       // NIF environemnt light (client -> server)
+    "render_preview",  // used to send compressed video packets
+                       // for render preview (server -> client)
 };
 
 // Struct and serialize function to send
@@ -41,14 +41,15 @@ struct SamplesRates {
 };
 
 template <typename T>
-void serialize(T& ar, SamplesRates& s) { ar(s.pathRate, s.rayRate); }
+void serialize(T& ar, SamplesRates& s) {
+  ar(s.pathRate, s.rayRate);
+}
 
-} // end anonymous namespace
+}  // end anonymous namespace
 
 using namespace std::chrono_literals;
 
 class InterfaceServer {
-
   void communicate() {
     ipu_utils::logger()->info("User interface server listening on port {}", port);
     serverSocket.Bind(port);
@@ -61,10 +62,10 @@ class InterfaceServer {
       sender.reset(new PacketMuxer(*connection, packetTypes));
 
       // Lambda that enqueues video packets via the Muxing system:
-      FFMpegStdFunctionIO videoIO( FFMpegCustomIO::WriteBuffer, [&]( uint8_t* buffer, int size ) {
+      FFMpegStdFunctionIO videoIO(FFMpegCustomIO::WriteBuffer, [&](uint8_t* buffer, int size) {
         if (sender) {
           ipu_utils::logger()->debug("Sending compressed video packet of size: {}", size);
-          sender->emplacePacket("render_preview", reinterpret_cast<VectorStream::CharType*>(buffer), size );
+          sender->emplacePacket("render_preview", reinterpret_cast<VectorStream::CharType*>(buffer), size);
           return sender->ok() ? size : -1;
         }
         return -1;
@@ -72,21 +73,21 @@ class InterfaceServer {
       videoStream.reset(new LibAvWriter(videoIO));
 
       auto subs1 = receiver.subscribe("env_rotation",
-                                     [&](const ComPacket::ConstSharedPacket& packet) {
+                                      [&](const ComPacket::ConstSharedPacket& packet) {
                                         deserialise(packet, state.envRotationDegrees);
                                         ipu_utils::logger()->trace("Env rotation new value: {}", state.envRotationDegrees);
                                         stateUpdated = true;
                                       });
 
       auto subs2 = receiver.subscribe("detach",
-                                     [&](const ComPacket::ConstSharedPacket& packet) {
+                                      [&](const ComPacket::ConstSharedPacket& packet) {
                                         deserialise(packet, state.detach);
                                         ipu_utils::logger()->trace("Remote UI detached.");
                                         stateUpdated = true;
                                       });
 
       auto subs3 = receiver.subscribe("stop",
-                                     [&](const ComPacket::ConstSharedPacket& packet) {
+                                      [&](const ComPacket::ConstSharedPacket& packet) {
                                         deserialise(packet, state.stop);
                                         ipu_utils::logger()->trace("Render stopped by remote UI.");
                                         stateUpdated = true;
@@ -95,19 +96,19 @@ class InterfaceServer {
       // NOTE: Tone mapping is not done on IPU so for exposure and gamma changes we
       // don't mark state as updated to avoid causing an unecessary render re-start.
       auto subs4 = receiver.subscribe("exposure",
-                                     [&](const ComPacket::ConstSharedPacket& packet) {
-                                        deserialise(packet, state.exposure );
+                                      [&](const ComPacket::ConstSharedPacket& packet) {
+                                        deserialise(packet, state.exposure);
                                         ipu_utils::logger()->trace("Exposure new value: {}", state.exposure);
                                       });
 
       auto subs5 = receiver.subscribe("gamma",
-                                     [&](const ComPacket::ConstSharedPacket& packet) {
-                                        deserialise(packet, state.gamma );
+                                      [&](const ComPacket::ConstSharedPacket& packet) {
+                                        deserialise(packet, state.gamma);
                                         ipu_utils::logger()->trace("Gamma new value: {}", state.gamma);
                                       });
 
       auto subs6 = receiver.subscribe("fov",
-                                     [&](const ComPacket::ConstSharedPacket& packet) {
+                                      [&](const ComPacket::ConstSharedPacket& packet) {
                                         deserialise(packet, state.fov);
                                         // To radians:
                                         state.fov = state.fov * (M_PI / 180.f);
@@ -116,7 +117,7 @@ class InterfaceServer {
                                       });
 
       auto subs7 = receiver.subscribe("load_nif",
-                                     [&](const ComPacket::ConstSharedPacket& packet) {
+                                      [&](const ComPacket::ConstSharedPacket& packet) {
                                         deserialise(packet, state.newNif);
                                         ipu_utils::logger()->trace("Received new NIF path: {}", state.newNif);
                                         stateUpdated = true;
@@ -139,7 +140,6 @@ class InterfaceServer {
   }
 
 public:
-
   enum class Status {
     Stop,
     Restart,
@@ -160,8 +160,8 @@ public:
   /// Return a copy of the state and mark it as consumed:
   State consumeState() {
     State tmp = state;
-    stateUpdated = false; // Clear the update flag.
-    state.newNif.clear(); // Clear model load request.
+    stateUpdated = false;  // Clear the update flag.
+    state.newNif.clear();  // Clear model load request.
     return tmp;
   }
 
@@ -175,11 +175,10 @@ public:
   }
 
   InterfaceServer(int portNumber)
-    : port(portNumber),
-      stopServer(false),
-      serverReady(false),
-      stateUpdated(false)
-  {}
+      : port(portNumber),
+        stopServer(false),
+        serverReady(false),
+        stateUpdated(false) {}
 
   /// Launches the UI thread and blocks until a connection is
   /// made and all server state is initialised. Note that some
@@ -217,7 +216,7 @@ public:
 
   void updateProgress(int step, int totalSteps) {
     if (sender) {
-      serialise(*sender, "progress", step/(float)totalSteps);
+      serialise(*sender, "progress", step / (float)totalSteps);
     }
   }
 

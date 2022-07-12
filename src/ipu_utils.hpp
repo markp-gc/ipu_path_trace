@@ -2,20 +2,20 @@
 
 #pragma once
 
-#include <iostream>
 #include <fstream>
-#include <string>
 #include <functional>
+#include <iostream>
+#include <string>
 
-#include <poplar/Graph.hpp>
-#include <poplar/Engine.hpp>
-#include <poplar/IPUModel.hpp>
 #include <poplar/DeviceManager.hpp>
+#include <poplar/Engine.hpp>
+#include <poplar/Graph.hpp>
+#include <poplar/IPUModel.hpp>
 
 #include <pvti/pvti.hpp>
 
-#include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
 
 #include "logging.hpp"
 
@@ -23,16 +23,16 @@ namespace ipu_utils {
 
 /// Return the application's shared logger object.
 inline std::shared_ptr<spdlog::logger> logger() {
-    static auto logger = spdlog::stdout_logger_mt("ipu_trace_logger");
-    return spdlog::get("ipu_trace_logger");
+  static auto logger = spdlog::stdout_logger_mt("ipu_trace_logger");
+  return spdlog::get("ipu_trace_logger");
 }
 
 inline std::string makeExeFileName(const std::string& name) {
-    return name + ".poplar.exe";
+  return name + ".poplar.exe";
 }
 
 inline std::string makeProgramsFileName(const std::string& name) {
-    return name + ".poplar.progs";
+  return name + ".poplar.progs";
 }
 
 inline poplar::Executable loadExe(const std::string& name) {
@@ -70,7 +70,8 @@ class DeferredDevice : public DeviceInterface {
 public:
   /// Create a device specifying whether hardware attach should
   /// be immediate (defer = false) or deferred (defer = true).
-  DeferredDevice(bool defer) : attached (nullptr), deferredAttach(defer) {}
+  DeferredDevice(bool defer)
+      : attached(nullptr), deferredAttach(defer) {}
   virtual ~DeferredDevice() {}
 
   /// Create a device with specified IPU model configuration.
@@ -120,9 +121,11 @@ public:
   }
 
   void attach() override {
-    if (attached) { return; }
+    if (attached) {
+      return;
+    }
 
-    for (auto &d : devices) {
+    for (auto& d : devices) {
       if (d.attach()) {
         auto ipus = d.getTarget().getNumIPUs();
         auto tilesPerIpu = d.getTarget().getTilesPerIPU();
@@ -163,15 +166,14 @@ struct RuntimeConfig {
 
 /// Determine whether to acquire a HW device or IPU model, and number of IPUs
 /// for either, from the relevant command line options.
-inline
-std::unique_ptr<DeviceInterface> getDeviceFromConfig(RuntimeConfig config) {
-    std::unique_ptr<DeferredDevice> device(new DeferredDevice(config.deferredAttach));
-    if(config.useIpuModel) {
-      device->getIpuModel(config.numIpus);
-    } else {
-      device->getIpuHardware(config.numIpus);
-    }
-    return device;
+inline std::unique_ptr<DeviceInterface> getDeviceFromConfig(RuntimeConfig config) {
+  std::unique_ptr<DeferredDevice> device(new DeferredDevice(config.deferredAttach));
+  if (config.useIpuModel) {
+    device->getIpuModel(config.numIpus);
+  } else {
+    device->getIpuHardware(config.numIpus);
+  }
+  return device;
 }
 
 using ProgramList = std::vector<poplar::program::Program>;
@@ -220,8 +222,9 @@ public:
   /// string name e.g. `engine.run(progs.getOrdinals().at("prog_name"))`
   ProgramOrdinals getOrdinals() const {
     if (ordinals.empty()) {
-      throw std::logic_error("Program ordinals map is empty. "
-                             "Did you call getList() or deserialise() first?");
+      throw std::logic_error(
+          "Program ordinals map is empty. "
+          "Did you call getList() or deserialise() first?");
     }
     return ordinals;
   }
@@ -283,25 +286,27 @@ void readScalar(poplar::Engine& e, const std::string& handle, T& s) {
 /// exe) so this encapsulates the necessary string management, which otherwise
 /// becomes unweildy.
 struct StreamableTensor {
-  StreamableTensor(const std::string& s) : name(s) {}
+  StreamableTensor(const std::string& s)
+      : name(s) {}
 
   std::string getName() const { return name; }
   std::string getWriteHandle() const { return name + "/write_stream"; }
   std::string getReadHandle() const { return name + "/read_stream"; }
 
-  template<typename... Args>
+  template <typename... Args>
   void buildTensor(poplar::Graph& graph,
-                   poplar::Type type, poplar::ArrayRef<std::size_t> shape,
+                   poplar::Type type,
+                   poplar::ArrayRef<std::size_t> shape,
                    poplar::VariableMappingMethod mapping = poplar::VariableMappingMethod::NONE) {
     checkedAssign(graph.addVariable(type, shape, mapping, name + "/tensor"));
   }
 
-  const poplar::Tensor& operator = (poplar::Tensor& t) {
+  const poplar::Tensor& operator=(poplar::Tensor& t) {
     checkedAssign(t);
     return tensor;
   }
 
-  const poplar::Tensor& operator = (poplar::Tensor&& t) {
+  const poplar::Tensor& operator=(poplar::Tensor&& t) {
     checkedAssign(t);
     return tensor;
   }
@@ -345,7 +350,7 @@ struct StreamableTensor {
   std::size_t numElements() const { return get().numElements(); }
   poplar::Type elementType() const { return get().elementType(); }
   std::vector<std::size_t> shape() const { return get().shape(); }
-  operator poplar::Tensor() { return get(); } // Overload cast to poplar::Tensor
+  operator poplar::Tensor() { return get(); }  // Overload cast to poplar::Tensor
   const poplar::Tensor& get() const {
     if (!tensor.valid()) {
       throw std::logic_error("Tensor must be assigned before access.");
@@ -410,15 +415,16 @@ private:
 /// Utility class that can be used to wrap a poplar::Engine::ProgressFunc
 /// callback in a filter that reduces the amount of output produced.
 class CallbackFilter {
-
 public:
   CallbackFilter(std::function<void(int, int)> progressFunc, int stageGap = 15, double timeGap = 10.0)
-    : wrappedCallback(progressFunc),
-      stageFilterCount(stageGap), timeFilterSecs(timeGap),
-      lastStage(0), lastTime(std::chrono::system_clock::now()) {}
+      : wrappedCallback(progressFunc),
+        stageFilterCount(stageGap),
+        timeFilterSecs(timeGap),
+        lastStage(0),
+        lastTime(std::chrono::system_clock::now()) {}
 
   // Return the filtered callback function:
-  std::function<void(int,int)> getFilteredCallback() {
+  std::function<void(int, int)> getFilteredCallback() {
     return std::bind(&CallbackFilter::callback, this, std::placeholders::_1, std::placeholders::_2);
   }
 
@@ -439,7 +445,7 @@ private:
     // Filters to reduce excessive logging:
     if (done - lastStage > stageFilterCount || secs > timeFilterSecs || done == todo) {
       lastStage = done;
-      lastTime  = currentTime;
+      lastTime = currentTime;
       wrappedCallback(done, todo);
     }
   }
@@ -499,7 +505,7 @@ public:
 
         logger()->info("Graph compilation started");
         pvti::Tracepoint::begin(&traceChannel, "compiling_graph");
-        CallbackFilter progress([] (int done, int todo) {
+        CallbackFilter progress([](int done, int todo) {
           logger()->debug("Compilation step {}/{}", done, todo);
         });
         poplar::Executable exe = poplar::compileGraph(graph, builder.getPrograms().getList(), {},
@@ -515,8 +521,8 @@ public:
         }
 
         if (config.compileOnly) {
-            ipu_utils::logger()->info("Compile only mode selected: finished.");
-            return EXIT_SUCCESS;
+          ipu_utils::logger()->info("Compile only mode selected: finished.");
+          return EXIT_SUCCESS;
         }
 
         // Run the graph we just built and compiled.
@@ -544,4 +550,4 @@ private:
   }
 };
 
-} // end namespace utils
+}  // namespace ipu_utils

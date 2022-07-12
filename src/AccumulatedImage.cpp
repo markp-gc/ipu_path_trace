@@ -4,9 +4,9 @@
 
 #include "codelets/TraceRecord.hpp"
 
+#include <cmath>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
-#include <cmath>
 
 void saveHdrImage(cv::Mat& hdrImage, const std::string& fileName) {
   auto baseName = fileName.substr(0, fileName.find_last_of('.'));
@@ -14,8 +14,7 @@ void saveHdrImage(cv::Mat& hdrImage, const std::string& fileName) {
 }
 
 AccumulatedImage::AccumulatedImage(std::size_t w, std::size_t h)
-  : hdrImage(h, w, CV_32FC3)
-{
+    : hdrImage(h, w, CV_32FC3) {
   reset();
 }
 
@@ -31,7 +30,7 @@ const cv::Mat& AccumulatedImage::updateLdrImage(std::size_t step, float exposure
   // Simple tone-map for the HDR image:
   const float exposureScale = std::pow(2.f, exposure);
   const float invGamma = 1.f / gamma;
-  #pragma omp parallel for schedule(auto)
+#pragma omp parallel for schedule(auto)
   for (auto r = 0; r < scaledImage.rows; ++r) {
     auto inPtr = scaledImage.ptr<float>(r);
     auto outPtr = ldrImage.ptr<float>(r);
@@ -57,7 +56,7 @@ void AccumulatedImage::saveImages(const std::string& fileName, std::size_t step,
 
 /// Accumulate the trace results converting from RGB to BGR in the process:
 void AccumulatedImage::accumulate(const std::vector<TraceRecord>& traces) {
-  #pragma omp parallel for schedule(auto)
+#pragma omp parallel for schedule(auto)
   for (std::size_t i = 0; i < traces.size(); ++i) {
     auto& t = traces[i];
     auto c = t.u;

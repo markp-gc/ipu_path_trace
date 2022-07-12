@@ -52,8 +52,9 @@ boost::program_options::variables_map parseOptions(int argc, char** argv, boost:
   // Defining NO_VIRTUAL_GRAPHS is a work around for a bug
   // in Poplar SDK 2.5 but it limits us to using 1 IPU:
   if (vm.at("ipus").as<std::size_t>() > 1) {
-    throw std::logic_error("You have compiled the application with virtual "
-                           "graphs disabled but selected more than 1 IPU.");
+    throw std::logic_error(
+        "You have compiled the application with virtual "
+        "graphs disabled but selected more than 1 IPU.");
   }
 #endif
 
@@ -79,14 +80,13 @@ boost::program_options::variables_map parseOptions(int argc, char** argv, boost:
 
 void setupLogging(const boost::program_options::variables_map& args) {
   std::map<std::string, spdlog::level::level_enum> levelFromStr = {
-    {"trace", spdlog::level::trace},
-    {"debug", spdlog::level::debug},
-    {"info", spdlog::level::info},
-    {"warn", spdlog::level::warn},
-    {"err", spdlog::level::err},
-    {"critical", spdlog::level::critical},
-    {"off", spdlog::level::off}
-  };
+      {"trace", spdlog::level::trace},
+      {"debug", spdlog::level::debug},
+      {"info", spdlog::level::info},
+      {"warn", spdlog::level::warn},
+      {"err", spdlog::level::err},
+      {"critical", spdlog::level::critical},
+      {"off", spdlog::level::off}};
 
   const auto levelStr = args["log-level"].as<std::string>();
   try {

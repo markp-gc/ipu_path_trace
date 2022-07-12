@@ -4,16 +4,15 @@
 
 #include "codelets/TraceRecord.hpp"
 
-#include "ipu_utils.hpp"
 #include "io_utils.hpp"
+#include "ipu_utils.hpp"
 
-#include <random>
 #include <algorithm>
+#include <random>
 
-WorkList::WorkList(std::size_t size) :
-  activeWork(size),
-  inactiveWork(size)
-{}
+WorkList::WorkList(std::size_t size)
+    : activeWork(size),
+      inactiveWork(size) {}
 
 WorkList::~WorkList() {}
 
@@ -33,7 +32,8 @@ void WorkList::swap() {
   }
 }
 
-LoadBalancer::LoadBalancer(std::size_t workItemCount) : work(workItemCount) {
+LoadBalancer::LoadBalancer(std::size_t workItemCount)
+    : work(workItemCount) {
 }
 
 LoadBalancer::~LoadBalancer() {
@@ -78,7 +78,7 @@ void LoadBalancer::allocateWorkByPathLength(const IpuJobList& jobs) {
 
   // Pre-allocate per tile worklists:
   std::vector<WorkList::RecordList> perTileWork(jobs.size());
-  for (auto &t : perTileWork) {
+  for (auto& t : perTileWork) {
     t.reserve(jobs[0].getPixelCount());
   }
 
@@ -92,7 +92,7 @@ void LoadBalancer::allocateWorkByPathLength(const IpuJobList& jobs) {
   ipu_utils::logger()->info("Load balancing started ({} work items)", sorted.size());
   ipu_utils::logger()->info("Path length min/max: {}/{}", shortItr->pathLength, longItr->pathLength);
   while (true) {
-    for (auto &t : perTileWork) {
+    for (auto& t : perTileWork) {
       // Take 2 work items, one from each end of queue:
       t.push_back(*shortItr);
       t.push_back(*longItr);
@@ -107,7 +107,7 @@ void LoadBalancer::allocateWorkByPathLength(const IpuJobList& jobs) {
 
   // Flatten the new worklist by tiles:
   auto itr = sorted.begin();
-  for (auto &t : perTileWork) {
+  for (auto& t : perTileWork) {
     for (auto& w : t) {
       *itr = w;
       ++itr;
@@ -122,7 +122,8 @@ std::size_t LoadBalancer::sumTotalInactivePathSegments() {
   auto& list = work.inactive();
 
   std::size_t sum = 0;
-  #pragma omp parallel for reduction(+ : sum) schedule(auto)
+#pragma omp parallel for reduction(+ \
+                                   : sum) schedule(auto)
   for (std::size_t i = 0; i < list.size(); ++i) {
     sum += list[i].pathLength;
   }
@@ -133,7 +134,7 @@ std::size_t LoadBalancer::sumTotalInactivePathSegments() {
 /// Clear the accumulators in the inactive work list:
 void LoadBalancer::clearInactiveAccumulators() {
   auto& list = work.inactive();
-  #pragma omp parallel for schedule(auto)
+#pragma omp parallel for schedule(auto)
   for (std::size_t i = 0; i < list.size(); ++i) {
     auto& t = list[i];
     t.r = t.g = t.b = 0.f;
@@ -145,7 +146,7 @@ void LoadBalancer::clearInactiveAccumulators() {
 /// Clear the accumulators in the inactive work list:
 void LoadBalancer::clearActiveAccumulators() {
   auto& list = work.active();
-  #pragma omp parallel for schedule(auto)
+#pragma omp parallel for schedule(auto)
   for (std::size_t i = 0; i < list.size(); ++i) {
     auto& t = list[i];
     t.r = t.g = t.b = 0.f;

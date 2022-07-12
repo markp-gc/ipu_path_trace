@@ -19,8 +19,8 @@ public:
   /// Run a thread forwarding all arguments to thread constructor.
   /// The thread must terminate of its own accord.
   /// Throws std::logic_error if a task was already in progress.
-  template <typename ...Args>
-  void run(Args&& ...args) {
+  template <typename... Args>
+  void run(Args&&... args) {
     if (job != nullptr) {
       auto error = "Attempted to run AsyncTask while a job was in progress.";
       ipu_utils::logger()->error(error);
@@ -46,6 +46,6 @@ public:
   }
 
 private:
-    std::unique_ptr<std::thread> job;
-    pvti::TraceChannel asyncTraceChannel = {"async_task"};
+  std::unique_ptr<std::thread> job;
+  pvti::TraceChannel asyncTraceChannel = {"async_task"};
 };

@@ -7,8 +7,8 @@
 
 #include <poplar/Graph.hpp>
 #include <poplar/Interval.hpp>
-#include <popops/ElementWise.hpp>
 #include <popops/Cast.hpp>
+#include <popops/ElementWise.hpp>
 #include <popops/Fill.hpp>
 
 std::map<std::size_t, poplar::Interval> getShardInfo(const poplar::Graph& graph) {
@@ -19,8 +19,7 @@ std::map<std::size_t, poplar::Interval> getShardInfo(const poplar::Graph& graph)
   for (auto i = 0u; i < numIpus; ++i) {
     auto nextShardEndTile = nextShardStartTile + tilesPerIpu;
     info.insert(
-      std::make_pair(i, poplar::Interval(nextShardStartTile, nextShardEndTile))
-    );
+        std::make_pair(i, poplar::Interval(nextShardStartTile, nextShardEndTile)));
     nextShardStartTile = nextShardEndTile;
   }
   return info;
@@ -60,8 +59,12 @@ poplar::Interval getTileInterval(const poplar::Graph& g, const poplar::Tensor& t
   }
   for (auto t = 0u; t < mapping.size(); ++t) {
     if (!mapping[t].empty()) {
-      if (t < min) { min = t; }
-      if (t > max) { max = t; }
+      if (t < min) {
+        min = t;
+      }
+      if (t > max) {
+        max = t;
+      }
     }
   }
   return poplar::Interval(min, max + 1);

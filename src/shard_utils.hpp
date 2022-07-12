@@ -4,9 +4,9 @@
 
 #include <poplar/Graph.hpp>
 
-#include <string>
 #include <iostream>
 #include <set>
+#include <string>
 
 std::vector<poplar::Graph> createIpuShards(poplar::Graph& graph);
 

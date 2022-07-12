@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include <vector>
 #include <memory>
+#include <vector>
 
 #include "IpuPathTraceJob.hpp"
 
@@ -12,7 +12,6 @@ struct TraceRecord;
 
 /// A double buffered work list.
 struct WorkList {
-
   using RecordList = std::vector<TraceRecord>;
 
   WorkList(std::size_t size);
@@ -31,7 +30,6 @@ private:
 };
 
 struct LoadBalancer {
-
   LoadBalancer(std::size_t workItemCount);
   virtual ~LoadBalancer();
 

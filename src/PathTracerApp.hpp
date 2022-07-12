@@ -2,20 +2,20 @@
 
 #pragma once
 
-#include <vector>
-#include <limits>
 #include <chrono>
+#include <limits>
 #include <memory>
 #include <numeric>
+#include <vector>
 
 #include <neural_networks/NifModel.hpp>
 
 #include <boost/program_options.hpp>
 
-#include "IpuPathTraceJob.hpp"
 #include "AccumulatedImage.hpp"
-#include "LoadBalancer.hpp"
 #include "InterfaceServer.hpp"
+#include "IpuPathTraceJob.hpp"
+#include "LoadBalancer.hpp"
 
 #include <pvti/pvti.hpp>
 
@@ -23,11 +23,9 @@
 struct TraceRecord;
 
 struct PathTracerState {
-
   PathTracerState(std::uint32_t imageWidth, std::uint32_t imageHeight)
-  : work(imageWidth * imageHeight),
-    film(imageWidth, imageHeight)
-  {}
+      : work(imageWidth * imageHeight),
+        film(imageWidth, imageHeight) {}
 
   LoadBalancer work;
   AccumulatedImage film;
@@ -36,7 +34,6 @@ struct PathTracerState {
 /// This is the main application object. It implements the BuilderInterface
 /// so that execution can be marshalled by a GraphManager object:
 struct PathTracerApp : public ipu_utils::BuilderInterface {
-
   /// Constructor does nothing of note, conforming to Poplar
   /// explorer tool interface (see init() instead).
   PathTracerApp();
@@ -67,8 +64,7 @@ private:
   void connectNifStreams(poplar::Engine& engine);
 
   std::pair<poplar::program::Sequence, poplar::program::Sequence>
-  buildEnvironmentNif(poplar::Graph& g, std::unique_ptr<NifModel>& model,
-                      poplar::Tensor input, poplar::Tensor& result);
+  buildEnvironmentNif(poplar::Graph& g, std::unique_ptr<NifModel>& model, poplar::Tensor input, poplar::Tensor& result);
 
   void initialiseState(std::uint32_t imageWidth, std::uint32_t imageHeight, poplar::Engine& engine);
   void defunctState(std::uint32_t imageWidth, std::uint32_t imageHeight, poplar::Engine& engine);
@@ -97,7 +93,8 @@ private:
 
   InterfaceServer::Status
   processUserInput(InterfaceServer::State& state,
-                   std::uint32_t imageWidth, std::uint32_t imageHeight,
+                   std::uint32_t imageWidth,
+                   std::uint32_t imageHeight,
                    poplar::Engine& engine,
                    const ipu_utils::ProgramManager& progs);
 

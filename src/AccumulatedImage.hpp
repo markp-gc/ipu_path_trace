@@ -11,7 +11,6 @@ void saveLdrImage(cv::Mat& hdrImage, const std::string& fileName);
 void saveHdrImage(cv::Mat& hdrImage, const std::string& fileName);
 
 struct AccumulatedImage {
-
   AccumulatedImage(std::size_t w, std::size_t h);
   virtual ~AccumulatedImage();
 

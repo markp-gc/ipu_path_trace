@@ -3,9 +3,9 @@
 #include "PathTracerApp.hpp"
 
 #include "AsyncTask.hpp"
+#include "codelets/TraceRecord.hpp"
 #include "ipu_utils.hpp"
 #include "shard_utils.hpp"
-#include "codelets/TraceRecord.hpp"
 
 #include <poplar/CycleCount.hpp>
 #include <popops/Loop.hpp>
@@ -21,52 +21,50 @@ std::size_t roundSamplesPerPixel(std::size_t samplesPerPixel,
   if (samplesPerPixel % samplesPerIpuStep) {
     samplesPerPixel += samplesPerIpuStep - (samplesPerPixel % samplesPerIpuStep);
     ipu_utils::logger()->info("Rounding SPP to next multiple of {}  (Rounded SPP :=  {})",
-                          samplesPerIpuStep, samplesPerPixel);
+                              samplesPerIpuStep, samplesPerPixel);
   }
   return samplesPerPixel;
 }
 
-poplar::Tensor buildAaNoise(poplar::Graph& graph, poplar::Tensor& layoutTensor,
-                            poplar::program::Sequence& prog, std::string aaNoiseType,
-                            std::string debugString) {
+poplar::Tensor buildAaNoise(poplar::Graph& graph, poplar::Tensor& layoutTensor, poplar::program::Sequence& prog, std::string aaNoiseType, std::string debugString) {
   if (aaNoiseType == "uniform") {
     return poprand::uniform(
-      graph, nullptr, 0u, layoutTensor, poplar::HALF, -1.f, 1.f,
-      prog, debugString);
+        graph, nullptr, 0u, layoutTensor, poplar::HALF, -1.f, 1.f,
+        prog, debugString);
   } else if (aaNoiseType == "normal") {
     return poprand::normal(
-      graph, nullptr, 0u, layoutTensor, poplar::HALF, 0.f, 1.f,
-      prog, debugString);
+        graph, nullptr, 0u, layoutTensor, poplar::HALF, 0.f, 1.f,
+        prog, debugString);
   } else if (aaNoiseType == "truncated-normal") {
     return poprand::truncatedNormal(
-      graph, nullptr, 0u, layoutTensor, poplar::HALF, 0.f, 1.f, 3.f,
-      prog, debugString);
+        graph, nullptr, 0u, layoutTensor, poplar::HALF, 0.f, 1.f, 3.f,
+        prog, debugString);
   } else {
     throw std::runtime_error("Invalid AA noise type: " + aaNoiseType);
   }
 }
 
 PathTracerApp::PathTracerApp()
-: traceChannel("ipu_path_tracer"),
-  seedTensor("seed"),
-  aaScaleTensor("anti_alias_scale"),
-  fovTensor("field_of_view"),
-  azimuthRotation("hdri_azimuth"),
-  deviceSampleLimit("on_device_sample_limit"),
-  nifCycleCount("nif_cycle_count"),
-  pathTraceCycleCount("path_trace_cycle_count"),
-  iterationCycles("iter_cycle_count"),
-  traceBuffer("trace_buffer") {}
+    : traceChannel("ipu_path_tracer"),
+      seedTensor("seed"),
+      aaScaleTensor("anti_alias_scale"),
+      fovTensor("field_of_view"),
+      azimuthRotation("hdri_azimuth"),
+      deviceSampleLimit("on_device_sample_limit"),
+      nifCycleCount("nif_cycle_count"),
+      pathTraceCycleCount("path_trace_cycle_count"),
+      iterationCycles("iter_cycle_count"),
+      traceBuffer("trace_buffer") {}
 
 void PathTracerApp::init(const boost::program_options::variables_map& options) {
   args = options;
   samplesPerPixel = args.at("samples").as<std::uint32_t>();
   samplesPerIpuStep = args.at("samples-per-step").as<std::uint32_t>();
 
-  auto imageWidth  = args.at("width").as<std::uint32_t>();
+  auto imageWidth = args.at("width").as<std::uint32_t>();
   auto imageHeight = args.at("height").as<std::uint32_t>();
-  auto tileWidth   = args.at("tile-width").as<std::uint32_t>();
-  auto tileHeight  = args.at("tile-height").as<std::uint32_t>();
+  auto tileWidth = args.at("tile-width").as<std::uint32_t>();
+  auto tileHeight = args.at("tile-height").as<std::uint32_t>();
   auto seed = args.at("seed").as<std::uint64_t>();
 
   samplesPerPixel = roundSamplesPerPixel(samplesPerPixel, samplesPerIpuStep);
@@ -78,7 +76,7 @@ void PathTracerApp::init(const boost::program_options::variables_map& options) {
 
   pvti::Tracepoint::begin(&traceChannel, "create_path_tracing_jobs");
   traceJobs = createTracingJobs(
-    imageWidth, imageHeight, tileWidth, tileHeight, samplesPerIpuStep, seed);
+      imageWidth, imageHeight, tileWidth, tileHeight, samplesPerIpuStep, seed);
   ipu_utils::logger()->info("Graph uses {} tiles", traceJobs.size());
 
   ipuJobs.reserve(traceJobs.size());
@@ -92,22 +90,22 @@ void PathTracerApp::init(const boost::program_options::variables_map& options) {
 ipu_utils::RuntimeConfig PathTracerApp::getRuntimeConfig() const {
   auto exeName = args.at("save-exe").as<std::string>();
   if (exeName.empty()) {
-    exeName = args.at("load-exe").as<std::string>();;
+    exeName = args.at("load-exe").as<std::string>();
+    ;
   }
 
   bool compileOnly = args.at("compile-only").as<bool>();
   bool deferAttach = args.at("defer-attach").as<bool>();
 
   return ipu_utils::RuntimeConfig{
-    args.at("ipus").as<std::size_t>(),
-    1u, // Number of replicas
-    exeName,
-    args.at("model").as<bool>(),
-    !args.at("save-exe").as<std::string>().empty(),
-    !args.at("load-exe").as<std::string>().empty(),
-    compileOnly,
-    compileOnly || deferAttach
-  };
+      args.at("ipus").as<std::size_t>(),
+      1u,  // Number of replicas
+      exeName,
+      args.at("model").as<bool>(),
+      !args.at("save-exe").as<std::string>().empty(),
+      !args.at("load-exe").as<std::string>().empty(),
+      compileOnly,
+      compileOnly || deferAttach};
 }
 
 poplar::Tensor PathTracerApp::createNifInput(poplar::Graph& g, std::size_t numJobsInBatch) {
@@ -142,22 +140,19 @@ void PathTracerApp::connectNifStreams(poplar::Engine& engine) {
 }
 
 std::pair<poplar::program::Sequence, poplar::program::Sequence>
-PathTracerApp::buildEnvironmentNif(poplar::Graph& g, std::unique_ptr<NifModel>& model,
-                    poplar::Tensor input, poplar::Tensor& result)
-{
+PathTracerApp::buildEnvironmentNif(poplar::Graph& g, std::unique_ptr<NifModel>& model, poplar::Tensor input, poplar::Tensor& result) {
   if (!model) {
     throw std::runtime_error("Empty NIF model object.");
   }
 
   bool optimiseStreamMemory = true;
   auto availableMemoryProportion = args.at("available-memory-proportion").as<float>();
-  poplar::OptionFlags matmulOptions {
-    {"partialsType", args.at("partials-type").as<std::string>()},
-    {"availableMemoryProportion", std::to_string(availableMemoryProportion)},
-    {"fullyConnectedPass", "INFERENCE_FWD"},
-    {"use128BitConvUnitLoad", "true"},
-    {"enableFastReduce", "true"}
-  };
+  poplar::OptionFlags matmulOptions{
+      {"partialsType", args.at("partials-type").as<std::string>()},
+      {"availableMemoryProportion", std::to_string(availableMemoryProportion)},
+      {"fullyConnectedPass", "INFERENCE_FWD"},
+      {"use128BitConvUnitLoad", "true"},
+      {"enableFastReduce", "true"}};
 
   // We need to serialise the input into smaller batches to save memory.  Keep this
   // part simple and find first divisor below the 'optimal' (empirically determined) batch size.
@@ -170,7 +165,9 @@ PathTracerApp::buildEnvironmentNif(poplar::Graph& g, std::unique_ptr<NifModel>& 
   float optimalBatchSize = args.at("max-nif-batch-size").as<std::size_t>();
   float optimalFactor = fullBatchSize / optimalBatchSize;
   unsigned closestFactor = std::ceil(optimalFactor);
-  while (fullBatchSize % closestFactor) { closestFactor += 1; }
+  while (fullBatchSize % closestFactor) {
+    closestFactor += 1;
+  }
   std::size_t batchSize = fullBatchSize / closestFactor;
   ipu_utils::logger()->debug("Batch-size serialisation full-size: {} serial-size: {} factor: {}", fullBatchSize, batchSize, closestFactor);
   if (batchSize > optimalBatchSize) {
@@ -182,8 +179,7 @@ PathTracerApp::buildEnvironmentNif(poplar::Graph& g, std::unique_ptr<NifModel>& 
   ipu_utils::logger()->debug("Serialised input shape: {}", inputSlice.shape());
 
   auto nifGraphFunc = g.addFunction(
-    model->buildInference(g, matmulOptions, cache, optimiseStreamMemory, inputSlice)
-  );
+      model->buildInference(g, matmulOptions, cache, optimiseStreamMemory, inputSlice));
 
   // Analyse the mode for the full batch size per replica:
   model->analyseModel(model->getBatchSize() * closestFactor);
@@ -300,7 +296,7 @@ std::pair<poplar::Tensor, poplar::program::Sequence>
 PathTracerApp::buildPrimarySamples(poplar::Graph& g, const std::string& prefix) {
   // Make a global noise tensor for primary sample space. Slices will be passed down to each tile:
   auto maxPathLength = args.at("max-path-length").as<std::uint32_t>();
-  auto maxSamplesPerRay = 3 * maxPathLength; // If every ray bounce was diffuse
+  auto maxSamplesPerRay = 3 * maxPathLength;  // If every ray bounce was diffuse
   ipu_utils::logger()->debug("Max number of primary samples per path: {}", maxSamplesPerRay);
   auto primarySamplesPerTile = maxSamplesPerRay * ipuJobs.front().getPixelCount();
 
@@ -367,12 +363,11 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
   // Make the compute sets for path tracing stages:
   const std::string prefix = "render/";
   const IpuPathTraceJob::CsMap computeSets = {
-    {"gen-rays", g.addComputeSet(prefix + "ray_gen")},
-    {"path-trace", g.addComputeSet(prefix + "path_trace")},
-    {"pre-process-escaped-rays", g.addComputeSet(prefix + "pre_process_escaped_rays")},
-    {"apply-env-lighting", g.addComputeSet(prefix + "apply_env_lighting")},
-    {"accumulate-lighting", g.addComputeSet(prefix + "accumulate_lighting")}
-  };
+      {"gen-rays", g.addComputeSet(prefix + "ray_gen")},
+      {"path-trace", g.addComputeSet(prefix + "path_trace")},
+      {"pre-process-escaped-rays", g.addComputeSet(prefix + "pre_process_escaped_rays")},
+      {"apply-env-lighting", g.addComputeSet(prefix + "apply_env_lighting")},
+      {"accumulate-lighting", g.addComputeSet(prefix + "accumulate_lighting")}};
 
   poplar::Tensor aaNoise;
   poplar::program::Sequence genAaNoise;
@@ -386,16 +381,14 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
 
   const auto pathsPerTile = ipuJobs.front().getPixelCount();
   traceBuffer = g.addVariable(
-    poplar::UNSIGNED_CHAR,
-    {ipuJobs.size(), sizeof(TraceRecord) * pathsPerTile},
-    prefix + "tracebuffer"
-  );
+      poplar::UNSIGNED_CHAR,
+      {ipuJobs.size(), sizeof(TraceRecord) * pathsPerTile},
+      prefix + "tracebuffer");
   ipu_utils::logger()->info("Tracebuffer shape: {}", traceBuffer.get().shape());
   auto primaryRays = g.addVariable(
-    poplar::HALF,
-    {ipuJobs.size(), IpuPathTraceJob::numRayDirComponents * pathsPerTile},
-    prefix + "primary_rays"
-  );
+      poplar::HALF,
+      {ipuJobs.size(), IpuPathTraceJob::numRayDirComponents * pathsPerTile},
+      prefix + "primary_rays");
 
   mapTensorOverJobs(g, traceBuffer.get());
   mapTensorOverJobs(g, primaryRays);
@@ -410,17 +403,16 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
     auto traceBufferSlice = traceBuffer.get().slice(j, j + 1, 0).reshape({traceBuffer.get().dim(1)});
     auto primaryRaysSlice = primaryRays.slice(j, j + 1, 0).reshape({primaryRays.dim(1)});
     const IpuPathTraceJob::InputMap jobInputs = {
-      {"aa-scale", aaScaleTensor},
-      {"fov", fovTensor},
-      {"uv-input", uvInputSlice},
-      {"env-map-result", nifResultSlice},
-      {"env-map-rotation", azimuthRotation},
-      {"aa-noise", aaNoiseFlatSlice},
-      {"primary-samples", samplesFlatSlice},
-      {"path-records", pathRecordsSlice},
-      {"tracebuffer", traceBufferSlice},
-      {"primary-rays", primaryRaysSlice}
-    };
+        {"aa-scale", aaScaleTensor},
+        {"fov", fovTensor},
+        {"uv-input", uvInputSlice},
+        {"env-map-result", nifResultSlice},
+        {"env-map-rotation", azimuthRotation},
+        {"aa-noise", aaNoiseFlatSlice},
+        {"primary-samples", samplesFlatSlice},
+        {"path-records", pathRecordsSlice},
+        {"tracebuffer", traceBufferSlice},
+        {"primary-rays", primaryRaysSlice}};
     auto& job = ipuJobs[j];
     job.buildGraph(g, jobInputs, computeSets, args);
   }
@@ -444,7 +436,7 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
   Sequence execPathTrace;
   execPathTrace.add(Execute(computeSets.at("path-trace")));
   pathTraceCycleCount = poplar::cycleCount(
-    g, execPathTrace, 0, poplar::SyncType::EXTERNAL, "path_trace_cycle_count");
+      g, execPathTrace, 0, poplar::SyncType::EXTERNAL, "path_trace_cycle_count");
 
   pathTraceIteration.add(execPathTrace);
   pathTraceIteration.add(WriteUndef(primarySamples));
@@ -464,7 +456,7 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
 
   // Record total cycles for one iteration:
   iterationCycles = poplar::cycleCount(
-    g, pathTraceIteration, 0, poplar::SyncType::EXTERNAL, "cycles_per_iteration");
+      g, pathTraceIteration, 0, poplar::SyncType::EXTERNAL, "cycles_per_iteration");
 
   // Repeat the core path tracing program for a number of
   // iterations which is fixed at graph compile time:
@@ -531,11 +523,11 @@ void PathTracerApp::defunctState(std::uint32_t imageWidth, std::uint32_t imageHe
 
 InterfaceServer::Status
 PathTracerApp::processUserInput(
-                      InterfaceServer::State& state,
-                      std::uint32_t imageWidth, std::uint32_t imageHeight,
-                      poplar::Engine& engine,
-                      const ipu_utils::ProgramManager& progs)
-{
+    InterfaceServer::State& state,
+    std::uint32_t imageWidth,
+    std::uint32_t imageHeight,
+    poplar::Engine& engine,
+    const ipu_utils::ProgramManager& progs) {
   if (state.stop) {
     ipu_utils::logger()->info("Rendering stopped by remote UI");
     return InterfaceServer::Status::Stop;
@@ -564,7 +556,6 @@ PathTracerApp::processUserInput(
 }
 
 void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device) {
-
   pvti::Tracepoint::begin(&traceChannel, "initialisation");
 
   auto imageWidth = args.at("width").as<std::uint32_t>();
@@ -712,7 +703,7 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
     // has returned. We explicitly capture pointers to the work list and
     // film that we are going to process as these may be made defunct by
     // user interaction if remote-UI is enabled.
-    hostProcessing.run([&, step, workPtr=&traceState->work, filmPtr=&traceState->film]() {
+    hostProcessing.run([&, step, workPtr = &traceState->work, filmPtr = &traceState->film]() {
       pvti::Tracepoint asyncScopedTrace(&hostTraceChannel, "async_work");
 
       // We process results from the inactive worklist while the IPU
@@ -763,7 +754,7 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
     auto sampleRate = pixelSamplesPerStep / secs;
     auto rayRate = totalRays / secs;
     ipu_utils::logger()->info("Completed render step {}/{} in {} seconds (Samples/sec {}) (Rays/sec {})",
-                          step, steps, secs, sampleRate, rayRate);
+                              step, steps, secs, sampleRate, rayRate);
     series.add(sampleRate);
 
     if (uiServer) {
