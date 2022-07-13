@@ -79,6 +79,18 @@ public:
   }
 };
 
+inline
+bool ipu_glossy_reflect(light::Ray& ray, light::Vector normal, float gloss) {
+  light::reflect(ray, normal); // Perfect specular reflection (ray is modifed in place).
+
+  // Use __builtin_ipu_urand_f32() to perturb the reflected
+  // ray (i.e. ray.direction) creating a glossy reflection.
+
+  // For prefect specular reflection the ray is never absorbed (return false).
+  // Hint: for a scattered reflection some rays should be absorbed..
+  return false;
+}
+
 /// Codelet which performs ray tracing for the tile. It knows
 /// nothing about the image geometry - it just receives a flat
 /// buffer of primary rays as input and stores the result of path
@@ -101,6 +113,7 @@ public:
   Input<unsigned short> rouletteDepth;
 
   bool compute() {
+    const float metalGloss = 0.3f;
     const Vec zero(0.f, 0.f, 0.f);
     const Vec one(1.f, 1.f, 1.f);
     const auto X = Vec(1.f, 0.f, 0.f);
@@ -203,7 +216,7 @@ public:
             light::diffuse(ray, intersection.normal, intersection, rrFactor, sample1, sample2);
           contributions.push_back(result);
         } else if (intersection.material->type == specular) {
-          light::reflect(ray, intersection.normal);
+          ipu_glossy_reflect(ray, intersection.normal, metalGloss);
           contributions.push_back({zero, rrFactor, light::Contribution::Type::SPECULAR});
         } else if (intersection.material->type == refractive) {
           const float ri = (float)*refractiveIndex;
