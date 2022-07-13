@@ -35,8 +35,8 @@ struct LoadBalancer {
 
   WorkList& getWork() { return work; }
 
-  void randomiseWorkList(const IpuJobList& jobs);
-  void allocateWorkByPathLength(const IpuJobList& jobs);
+  void initialiseWorkList(const IpuJobList& jobs);
+  void balanceInactiveWorkList(std::size_t totalPaths, std::size_t pathsPerTile);
   void clearInactiveAccumulators();
   void clearActiveAccumulators();
   std::size_t sumTotalInactivePathSegments();

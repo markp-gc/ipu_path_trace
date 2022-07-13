@@ -40,7 +40,7 @@ LoadBalancer::~LoadBalancer() {
 }
 
 // Randomise the inactive worklist:
-void LoadBalancer::randomiseWorkList(const IpuJobList& jobs) {
+void LoadBalancer::initialiseWorkList(const IpuJobList& jobs) {
   // Take a copy of the active worklist:
   auto workList = work.inactive();
 
@@ -55,66 +55,35 @@ void LoadBalancer::randomiseWorkList(const IpuJobList& jobs) {
     }
   }
 
-  // Random shuffle the work list:
-  auto workSeed = 142u;
-  std::mt19937 g(workSeed);
-  std::shuffle(workList.begin(), workList.end(), g);
-
   // Overwrite the inactive worklist:
   work.inactive() = workList;
 }
 
-void LoadBalancer::allocateWorkByPathLength(const IpuJobList& jobs) {
-  // Sort a copy of the inactive work list by path length:
-  auto sorted = work.inactive();
+void LoadBalancer::balanceInactiveWorkList(std::size_t totalPaths, std::size_t pathsPerTile) {
 
-  ipu_utils::logger()->trace("Worklist before sort:\n{}", sorted);
+  // The inactive worklist is the one used from the last
+  // iteration on the device (so the statistics it contains
+  // are one step out of date).
+  //
+  // Each work item in the list is a TraceRecord object
+  // (see src/codelets/TraceRecord.cpp). Each IPU tile will
+  // process a contiguous chunk of size 'pathsPerTile' the list
+  // you return.
+  WorkList::RecordList balancedWork = work.inactive();
 
-  std::sort(sorted.begin(), sorted.end(), [](const TraceRecord& a, const TraceRecord& b) -> bool {
+  // HINT: A reasonable place to start is to sort the worklist by
+  // path-length (path-length is proportional to computational load)
+  // and then decide how to distribute work evenly across tiles:
+  ipu_utils::logger()->trace("Worklist before sort:\n{}", balancedWork);
+  std::sort(balancedWork.begin(), balancedWork.end(), [](const TraceRecord& a, const TraceRecord& b) -> bool {
     return a.pathLength < b.pathLength;
   });
+  ipu_utils::logger()->trace("Worklist after sort:\n{}", balancedWork);
 
-  ipu_utils::logger()->trace("Worklist after sort:\n{}", sorted);
+  // Insert work distribution algorithm here: NOTE: you only need to reorder the existing list (i.e. set pixel coords) - stats will be reset appropriately elsewhere.
 
-  // Pre-allocate per tile worklists:
-  std::vector<WorkList::RecordList> perTileWork(jobs.size());
-  for (auto& t : perTileWork) {
-    t.reserve(jobs[0].getPixelCount());
-  }
-
-  // Iterators for longest and shortest paths:
-  auto shortItr = sorted.begin();
-  auto longItr = sorted.end() - 1;
-
-  // Allocate work to tiles by taking pairs of items from both ends of the sorted list.
-  // I.e. the tile that takes the longest path from the last render step also takes the
-  // shortest path, and so on until the worklist is exhausted:
-  ipu_utils::logger()->info("Load balancing started ({} work items)", sorted.size());
-  ipu_utils::logger()->info("Path length min/max: {}/{}", shortItr->pathLength, longItr->pathLength);
-  while (true) {
-    for (auto& t : perTileWork) {
-      // Take 2 work items, one from each end of queue:
-      t.push_back(*shortItr);
-      t.push_back(*longItr);
-      ++shortItr;
-      --longItr;
-    }
-    if (longItr <= shortItr) {
-      break;
-    }
-  }
-  ipu_utils::logger()->info("Load balancing finished");
-
-  // Flatten the new worklist by tiles:
-  auto itr = sorted.begin();
-  for (auto& t : perTileWork) {
-    for (auto& w : t) {
-      *itr = w;
-      ++itr;
-    }
-  }
-
-  work.inactive() = sorted;
+  // Record the balanced list:
+  work.inactive() = balancedWork;
 }
 
 /// Clear the accumulators in the inactive work list:

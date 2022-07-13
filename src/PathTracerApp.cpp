@@ -50,7 +50,6 @@ PathTracerApp::PathTracerApp()
       aaScaleTensor("anti_alias_scale"),
       fovTensor("field_of_view"),
       azimuthRotation("hdri_azimuth"),
-      deviceSampleLimit("on_device_sample_limit"),
       nifCycleCount("nif_cycle_count"),
       pathTraceCycleCount("path_trace_cycle_count"),
       iterationCycles("iter_cycle_count"),
@@ -348,10 +347,6 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
   g.setTileMapping(azimuthRotation, 0);
   initRenderSettings.add(azimuthRotation.buildWrite(g, optimiseCopyMemoryUse));
 
-  deviceSampleLimit.buildTensor(g, poplar::UNSIGNED_INT, {});
-  g.setTileMapping(deviceSampleLimit, 0);
-  initRenderSettings.add(deviceSampleLimit.buildWrite(g, optimiseCopyMemoryUse));
-
   pvti::Tracepoint::begin(&traceChannel, "build_nifs");
   auto numJobsInBatch = ipuJobs.size();
   auto uvInput = createNifInput(g, numJobsInBatch);
@@ -460,9 +455,7 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
 
   // Repeat the core path tracing program for a number of
   // iterations which is fixed at graph compile time:
-  auto sampleCounter = g.addVariable(poplar::UNSIGNED_INT, {});
-  g.setTileMapping(sampleCounter, 0);
-  auto executeRayTrace = popops::countedForLoop(g, sampleCounter, 0, deviceSampleLimit, 1, pathTraceIteration, "sampling_loop");
+  auto executePathTraceLoop = poplar::program::Repeat(samplesPerIpuStep, pathTraceIteration);
 
   // Program to read back results and stats:
   Sequence readTraceResult;
@@ -476,7 +469,7 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
   programs.add("init_render_settings", initRenderSettings);
   programs.add("init_nif_weights", envNifs.init);
   programs.add("setup", preTraceInit);
-  programs.add("path_trace", executeRayTrace);
+  programs.add("path_trace", executePathTraceLoop);
   programs.add("read_results", readTraceResult);
 }
 
@@ -486,7 +479,7 @@ void PathTracerApp::initialiseState(std::uint32_t imageWidth, std::uint32_t imag
   // We have two pointers for tracked work: one which is to keep defunct
   // data alive whilst asynchronous host processing completes on it.
   traceState = std::make_unique<PathTracerState>(imageWidth, imageHeight);
-  traceState->work.randomiseWorkList(ipuJobs);
+  traceState->work.initialiseWorkList(ipuJobs);
   traceState->work.getWork().active() = traceState->work.getWork().inactive();
   connectActiveWorkListStreams(engine);
 }
@@ -584,7 +577,6 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
   aaScaleTensor.connectWriteStream(engine, &aaScaleHalf);
   fovTensor.connectWriteStream(engine, &fovHalf);
   azimuthRotation.connectWriteStream(engine, &radians);
-  deviceSampleLimit.connectWriteStream(engine, &samplesPerIpuStep);
 
   // Connect streams for cycle counters:
   std::int64_t nifCycles;
@@ -727,7 +719,8 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
 
       if (loadBalanceEnabled && step > 1) {
         pvti::Tracepoint scopedTrace(&hostTraceChannel, "run_load_balancing");
-        workPtr->allocateWorkByPathLength(ipuJobs);
+        workPtr->balanceInactiveWorkList(ipuJobs.size(),
+                                         ipuJobs[0].getPixelCount());
       }
 
       totalRays = workPtr->sumTotalInactivePathSegments();
