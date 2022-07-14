@@ -71,16 +71,59 @@ void LoadBalancer::balanceInactiveWorkList(std::size_t totalPaths, std::size_t p
   // you return.
   WorkList::RecordList balancedWork = work.inactive();
 
-  // HINT: A reasonable place to start is to sort the worklist by
-  // path-length (path-length is proportional to computational load)
-  // and then decide how to distribute work evenly across tiles:
+  // Lazy but effective solution - randomise the work list:
+  // auto workSeed = 142u;
+  // std::mt19937 g(workSeed);
+  // std::shuffle(balancedWork.begin(), balancedWork.end(), g);
+  // work.inactive() = balancedWork;
+  // return;
+
+  // Sort a copy of the inactive work list by path length:
   ipu_utils::logger()->trace("Worklist before sort:\n{}", balancedWork);
+
   std::sort(balancedWork.begin(), balancedWork.end(), [](const TraceRecord& a, const TraceRecord& b) -> bool {
     return a.pathLength < b.pathLength;
   });
+
   ipu_utils::logger()->trace("Worklist after sort:\n{}", balancedWork);
 
-  // Insert work distribution algorithm here: NOTE: you only need to reorder the existing list (i.e. set pixel coords) - stats will be reset appropriately elsewhere.
+  // Pre-allocate per tile worklists:
+  std::vector<WorkList::RecordList> perTileWork(totalPaths);
+  for (auto& t : perTileWork) {
+    t.reserve(pathsPerTile);
+  }
+
+  // Iterators for longest and shortest paths:
+  auto shortItr = balancedWork.begin();
+  auto longItr = balancedWork.end() - 1;
+
+  // Allocate work to tiles by taking pairs of items from both ends of the sorted list.
+  // I.e. the tile that takes the longest path from the last render step also takes the
+  // shortest path, and so on until the worklist is exhausted:
+  ipu_utils::logger()->info("Load balancing started ({} work items)", balancedWork.size());
+  ipu_utils::logger()->info("Path length min/max: {}/{}", shortItr->pathLength, longItr->pathLength);
+  while (true) {
+    for (auto& t : perTileWork) {
+      // Take 2 work items, one from each end of queue:
+      t.push_back(*shortItr);
+      t.push_back(*longItr);
+      ++shortItr;
+      --longItr;
+    }
+    if (longItr <= shortItr) {
+      break;
+    }
+  }
+  ipu_utils::logger()->info("Load balancing finished");
+
+  // Flatten the new worklist by tiles:
+  auto itr = balancedWork.begin();
+  for (auto& t : perTileWork) {
+    for (auto& w : t) {
+      *itr = w;
+      ++itr;
+    }
+  }
 
   // Record the balanced list:
   work.inactive() = balancedWork;

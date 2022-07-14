@@ -727,8 +727,7 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
 
       if (loadBalanceEnabled && step > 1) {
         pvti::Tracepoint scopedTrace(&hostTraceChannel, "run_load_balancing");
-        workPtr->balanceInactiveWorkList(ipuJobs.size(),
-                                         ipuJobs[0].getPixelCount());
+        workPtr->balanceInactiveWorkList(ipuJobs.size(), ipuJobs[0].getPixelCount());
       }
 
       totalRays = workPtr->sumTotalInactivePathSegments();
