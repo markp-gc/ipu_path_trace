@@ -79,17 +79,52 @@ public:
   }
 };
 
+// NOTE: __builtin_ipu_urand_f32() is an IPU built-in which accesses the HW
+// random number generator directly. It is not available in non-IPU compilation
+// paths (e.g. for IPU Model or CPU simulation) so we need to put a guard and
+// have a different implementation for those cases.
+#ifdef __IPU__
+
 inline
 bool ipu_glossy_reflect(light::Ray& ray, light::Vector normal, float gloss) {
   light::reflect(ray, normal); // Perfect specular reflection (ray is modifed in place).
 
-  // Use __builtin_ipu_urand_f32() to perturb the reflected
-  // ray (i.e. ray.direction) creating a glossy reflection.
+  // Basic scattering model:
 
-  // For prefect specular reflection the ray is never absorbed (return false).
-  // Hint: for a scattered reflection some rays should be absorbed..
+  // Generate random point on unit sphere:
+  auto noise = light::Vector(
+    __builtin_ipu_urand_f32(),
+    __builtin_ipu_urand_f32(),
+    __builtin_ipu_urand_f32()).normalized();
+  // Scale the unit noise vector randomly so it lies uniformly
+  // in a ball with radius = gloss and add it to the reflected
+  // ray direction:
+  ray.direction += noise * (__builtin_ipu_urand_f32() * gloss);
+  // Normalise the final ray direction (rays are assumed normalised):
+  ray.direction = ray.direction.normalized();
+
+  // We need to absorb rays that scatter at grazing angles or
+  // below the surface otherwise we can get an unrealistic bright
+  // halo for high gloss values:
+  return ray.direction.dot(normal) < 0.f;
+}
+
+#else
+
+inline
+bool ipu_glossy_reflect(light::Ray& ray, light::Vector normal, float gloss) {
+  // For the non-IPU version we can not call the built-in that accesses the
+  // hardware so we only call the non-glossy specular reflect function
+  // and return.
+  //
+  // We could use random numbers in the same way they are used elsewhere
+  // if we wanted to maintain identical functionality (i.e. pre-compute
+  // them and and consume them from a buffer).
+  light::reflect(ray, normal);
   return false;
 }
+
+#endif
 
 /// Codelet which performs ray tracing for the tile. It knows
 /// nothing about the image geometry - it just receives a flat
@@ -113,7 +148,6 @@ public:
   Input<unsigned short> rouletteDepth;
 
   bool compute() {
-    const float metalGloss = 0.3f;
     const Vec zero(0.f, 0.f, 0.f);
     const Vec one(1.f, 1.f, 1.f);
     const auto X = Vec(1.f, 0.f, 0.f);
@@ -137,6 +171,7 @@ public:
     constexpr float lightStrength = 10000.f;
     const auto lightW = Vec(1.f, 1.f, 1.f) * lightStrength;
 
+    const float metalGloss = 0.5f;
     const float colourGain = 2.f;
     const auto sphereColour = Vec(1.f, .89f, .55f) * colourGain;
     const auto clearCoatColour = Vec(.8f, .06f, .391f) * colourGain;
@@ -216,8 +251,14 @@ public:
             light::diffuse(ray, intersection.normal, intersection, rrFactor, sample1, sample2);
           contributions.push_back(result);
         } else if (intersection.material->type == specular) {
-          ipu_glossy_reflect(ray, intersection.normal, metalGloss);
-          contributions.push_back({zero, rrFactor, light::Contribution::Type::SPECULAR});
+          bool absorbed = ipu_glossy_reflect(ray, intersection.normal, metalGloss);
+          if (absorbed) {
+            // Ray was absorbed so kill it:
+            contributions.push_back({zero, 0.f, light::Contribution::Type::END});
+            break;
+          } else {
+            contributions.push_back({zero, rrFactor, light::Contribution::Type::SPECULAR});
+          }
         } else if (intersection.material->type == refractive) {
           const float ri = (float)*refractiveIndex;
           auto refracted = light::refract(ray, intersection.normal, ri, (float)rng());
