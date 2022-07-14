@@ -109,6 +109,7 @@ private:
   ipu_utils::StreamableTensor aaScaleTensor;
   ipu_utils::StreamableTensor fovTensor;
   ipu_utils::StreamableTensor azimuthRotation;
+  ipu_utils::StreamableTensor deviceSampleLimit;
   ipu_utils::StreamableTensor nifCycleCount;
   ipu_utils::StreamableTensor pathTraceCycleCount;
   ipu_utils::StreamableTensor iterationCycles;

@@ -50,6 +50,7 @@ PathTracerApp::PathTracerApp()
       aaScaleTensor("anti_alias_scale"),
       fovTensor("field_of_view"),
       azimuthRotation("hdri_azimuth"),
+      deviceSampleLimit("on_device_sample_limit"),
       nifCycleCount("nif_cycle_count"),
       pathTraceCycleCount("path_trace_cycle_count"),
       iterationCycles("iter_cycle_count"),
@@ -347,6 +348,10 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
   g.setTileMapping(azimuthRotation, 0);
   initRenderSettings.add(azimuthRotation.buildWrite(g, optimiseCopyMemoryUse));
 
+  deviceSampleLimit.buildTensor(g, poplar::UNSIGNED_INT, {});
+  g.setTileMapping(deviceSampleLimit, 0);
+  initRenderSettings.add(deviceSampleLimit.buildWrite(g, optimiseCopyMemoryUse));
+
   pvti::Tracepoint::begin(&traceChannel, "build_nifs");
   auto numJobsInBatch = ipuJobs.size();
   auto uvInput = createNifInput(g, numJobsInBatch);
@@ -455,7 +460,9 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
 
   // Repeat the core path tracing program for a number of
   // iterations which is fixed at graph compile time:
-  auto executePathTraceLoop = poplar::program::Repeat(samplesPerIpuStep, pathTraceIteration);
+  auto sampleCounter = g.addVariable(poplar::UNSIGNED_INT, {});
+  g.setTileMapping(sampleCounter, 0);
+  auto executePathTraceLoop = popops::countedForLoop(g, sampleCounter, 0, deviceSampleLimit, 1, pathTraceIteration, "sampling_loop");
 
   // Program to read back results and stats:
   Sequence readTraceResult;
@@ -577,6 +584,7 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
   aaScaleTensor.connectWriteStream(engine, &aaScaleHalf);
   fovTensor.connectWriteStream(engine, &fovHalf);
   azimuthRotation.connectWriteStream(engine, &radians);
+  deviceSampleLimit.connectWriteStream(engine, &samplesPerIpuStep);
 
   // Connect streams for cycle counters:
   std::int64_t nifCycles;
