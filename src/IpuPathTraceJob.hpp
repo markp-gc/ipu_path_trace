@@ -33,7 +33,7 @@ struct IpuPathTraceJob {
   using InputMap = std::map<std::string, poplar::Tensor>;
   using CsMap = std::map<std::string, poplar::ComputeSet>;
 
-  TraceTileJob& jobSpec;
+  TraceTileJob jobSpec;
 
   ~IpuPathTraceJob();
 
@@ -41,7 +41,7 @@ struct IpuPathTraceJob {
   // The buildGraph() method constructs the Poplar graph components: graph execution and graph
   // construction are completely separated so that buildGraph() can be skipped when loading a
   // pre-compiled executable.
-  IpuPathTraceJob(TraceTileJob& spec,
+  IpuPathTraceJob(TraceTileJob spec,
                   const boost::program_options::variables_map& args,
                   std::size_t core);
 

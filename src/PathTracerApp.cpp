@@ -15,6 +15,9 @@
 #include <poplar/OptionFlags.hpp>
 #include <poplin/MatMul.hpp>
 
+#include <random>
+#include <limits>
+
 /// Adjust samples per pixel to be multiple of samples per ipu step:
 std::size_t roundSamplesPerPixel(std::size_t samplesPerPixel,
                                  std::size_t samplesPerIpuStep) {
@@ -75,7 +78,7 @@ void PathTracerApp::init(const boost::program_options::variables_map& options) {
   loadNifModels(numIpus, assetPath);
 
   pvti::Tracepoint::begin(&traceChannel, "create_path_tracing_jobs");
-  traceJobs = createTracingJobs(
+  auto traceJobs = createTracingJobs(
       imageWidth, imageHeight, tileWidth, tileHeight, samplesPerIpuStep, seed);
   ipu_utils::logger()->info("Graph uses {} tiles", traceJobs.size());
 

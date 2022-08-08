@@ -27,10 +27,12 @@ using Interval = std::pair<std::size_t, std::size_t>;
 
 /// Compute the start and end indices that can be used to slice the
 /// tile's pixels into chunks that each worker will process:
-std::vector<Interval> splitTilePixelsOverWorkers(std::size_t rows, std::size_t cols, std::size_t workers) {
-  const auto rowsPerWorker = rows / workers;
-  const auto leftOvers = rows % workers;
-  std::vector<std::size_t> work(workers, rowsPerWorker);
+std::vector<Interval> splitTilePixelsOverWorkers(std::size_t pixelCount, std::size_t workers) {
+  const auto raysPerWorker = pixelCount / workers;
+  const auto leftOvers = pixelCount % workers;
+  std::vector<std::size_t> work(workers, raysPerWorker);
+
+  ipu_utils::logger()->info("Splitting work: rays: {} raysPerWorker: {}", pixelCount, raysPerWorker);
 
   // Distribute leftovers amongst workers:
   for (auto i = 0u; i < leftOvers; ++i) {
@@ -42,7 +44,7 @@ std::vector<Interval> splitTilePixelsOverWorkers(std::size_t rows, std::size_t c
   intervals.reserve(workers);
   auto start = 0u;
   for (auto w : work) {
-    auto end = start + (cols * w);
+    auto end = start + w;
     intervals.emplace_back(start, end);
     start = end;
   }
@@ -67,7 +69,7 @@ poplar::Tensor IpuPathTraceJob::addScalar(poplar::Graph& graph, poplar::VertexRe
 
 IpuPathTraceJob::~IpuPathTraceJob() {}
 
-IpuPathTraceJob::IpuPathTraceJob(TraceTileJob& spec,
+IpuPathTraceJob::IpuPathTraceJob(TraceTileJob spec,
                                  const boost::program_options::variables_map& args,
                                  std::size_t core)
     : jobSpec(spec),
@@ -121,7 +123,7 @@ void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
 
   auto traceRecordSize = sizeof(TraceRecord);
 
-  const auto intervals = splitTilePixelsOverWorkers(jobSpec.rows(), jobSpec.cols(), workers);
+  const auto intervals = splitTilePixelsOverWorkers(getPixelCount(), workers);
   for (const auto& interval : intervals) {
     tracerVertices.push_back(graph.addVertex(pathTraceCs, "RayTraceKernel"));
     accumulatorVertices.push_back(graph.addVertex(accumulateCs, "AccumulateContributions"));

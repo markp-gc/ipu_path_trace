@@ -103,7 +103,6 @@ private:
   std::uint32_t samplesPerPixel;
   std::uint32_t samplesPerIpuStep;
   ipu_utils::ProgramManager programs;
-  std::vector<TraceTileJob> traceJobs;
   IpuJobList ipuJobs;
   ipu_utils::StreamableTensor seedTensor;
   ipu_utils::StreamableTensor aaScaleTensor;
