@@ -23,7 +23,12 @@ std::size_t calculateMaxRaysPerTile(std::size_t imageWidth, std::size_t imageHei
   }
 
   const auto totalRayCount = imageWidth * imageHeight;
-  const unsigned raysPerTile = std::ceil(totalRayCount / (float)numTiles);
+
+  // First round up rays per tile so all tiles have same worklist size:
+  unsigned raysPerTile = std::ceil(totalRayCount / (float)numTiles);
+
+  // Then round rays per tile to be next multiple of num-workers:
+  raysPerTile += raysPerTile % numWorkers;
 
   // We need a minimum number of rays in each tile's worklist
   // to avoid complicating the MultiVertex codelets:
