@@ -65,16 +65,6 @@ boost::program_options::variables_map parseOptions(int argc, char** argv, boost:
     throw std::logic_error("You can not set both save-exe and load-exe.");
   }
 
-  // Check tile widths and heights are compatible:
-  auto width = vm.at("width").as<std::uint32_t>();
-  auto tileWidth = vm.at("tile-width").as<std::uint32_t>();
-  auto height = vm.at("height").as<std::uint32_t>();
-  auto tileHeight = vm.at("tile-height").as<std::uint32_t>();
-
-  if (width % tileWidth || height % tileHeight) {
-    throw std::logic_error("Tile size does not divide evenly into image size.");
-  }
-
   return vm;
 }
 

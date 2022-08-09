@@ -33,7 +33,7 @@ struct IpuPathTraceJob {
   using InputMap = std::map<std::string, poplar::Tensor>;
   using CsMap = std::map<std::string, poplar::ComputeSet>;
 
-  TraceTileJob jobSpec;
+  std::size_t maxPixelCount;
 
   ~IpuPathTraceJob();
 
@@ -41,7 +41,7 @@ struct IpuPathTraceJob {
   // The buildGraph() method constructs the Poplar graph components: graph execution and graph
   // construction are completely separated so that buildGraph() can be skipped when loading a
   // pre-compiled executable.
-  IpuPathTraceJob(TraceTileJob spec,
+  IpuPathTraceJob(std::size_t maxRayCount,
                   const boost::program_options::variables_map& args,
                   std::size_t core);
 
@@ -53,7 +53,7 @@ struct IpuPathTraceJob {
   poplar::program::Sequence beginTraceJob() const { return beginSeq; }
   poplar::program::Sequence endTraceJob() const { return endSeq; }
 
-  std::size_t getPixelCount() const { return jobSpec.rows() * jobSpec.cols(); }
+  std::size_t getPixelCount() const { return maxPixelCount; }
   std::size_t getTile() const { return ipuCore; }
 
   // Hard code the maximum number of samples that a single path

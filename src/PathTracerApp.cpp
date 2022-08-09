@@ -15,9 +15,6 @@
 #include <poplar/OptionFlags.hpp>
 #include <poplin/MatMul.hpp>
 
-#include <random>
-#include <limits>
-
 /// Adjust samples per pixel to be multiple of samples per ipu step:
 std::size_t roundSamplesPerPixel(std::size_t samplesPerPixel,
                                  std::size_t samplesPerIpuStep) {
@@ -59,35 +56,17 @@ PathTracerApp::PathTracerApp()
       iterationCycles("iter_cycle_count"),
       traceBuffer("trace_buffer") {}
 
+
 void PathTracerApp::init(const boost::program_options::variables_map& options) {
   args = options;
   samplesPerPixel = args.at("samples").as<std::uint32_t>();
   samplesPerIpuStep = args.at("samples-per-step").as<std::uint32_t>();
-
-  auto imageWidth = args.at("width").as<std::uint32_t>();
-  auto imageHeight = args.at("height").as<std::uint32_t>();
-  auto tileWidth = args.at("tile-width").as<std::uint32_t>();
-  auto tileHeight = args.at("tile-height").as<std::uint32_t>();
-  auto seed = args.at("seed").as<std::uint64_t>();
-
   samplesPerPixel = roundSamplesPerPixel(samplesPerPixel, samplesPerIpuStep);
 
   // Read the metadata saved with the model:
   auto numIpus = args.at("ipus").as<std::size_t>();
   auto assetPath = args.at("assets").as<std::string>();
   loadNifModels(numIpus, assetPath);
-
-  pvti::Tracepoint::begin(&traceChannel, "create_path_tracing_jobs");
-  auto traceJobs = createTracingJobs(
-      imageWidth, imageHeight, tileWidth, tileHeight, samplesPerIpuStep, seed);
-  ipu_utils::logger()->info("Graph uses {} tiles", traceJobs.size());
-
-  ipuJobs.reserve(traceJobs.size());
-  for (auto c = 0u; c < traceJobs.size(); ++c) {
-    ipuJobs.emplace_back(traceJobs[c], args, c);
-  }
-
-  pvti::Tracepoint::end(&traceChannel, "create_path_tracing_jobs");
 }
 
 ipu_utils::RuntimeConfig PathTracerApp::getRuntimeConfig() const {
@@ -111,8 +90,7 @@ ipu_utils::RuntimeConfig PathTracerApp::getRuntimeConfig() const {
       compileOnly || deferAttach};
 }
 
-poplar::Tensor PathTracerApp::createNifInput(poplar::Graph& g, std::size_t numJobsInBatch) {
-  auto pixelsPerJob = ipuJobs.front().getPixelCount();
+poplar::Tensor PathTracerApp::createNifInput(poplar::Graph& g, std::size_t numJobsInBatch, std::size_t pixelsPerJob) {
   auto uvInput = g.addVariable(poplar::FLOAT, {2, numJobsInBatch, pixelsPerJob}, "envmap_input_uv");
 
   // Need to set tile mapping for input before we can use it:
@@ -323,6 +301,18 @@ poplar::Tensor PathTracerApp::buildPathRecords(poplar::Graph& g, const std::stri
 void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
   using namespace poplar;
 
+  pvti::Tracepoint::begin(&traceChannel, "create_path_tracing_jobs");
+  auto imageWidth = args.at("width").as<std::uint32_t>();
+  auto imageHeight = args.at("height").as<std::uint32_t>();
+  const auto tiles = target.getNumTiles();
+  auto raysPerJob = calculateMaxRaysPerTile(imageWidth, imageHeight, target);
+
+  ipuJobs.reserve(tiles);
+  for (auto t = 0u; t < tiles; ++t) {
+    ipuJobs.emplace_back(raysPerJob, args, t);
+  }
+  pvti::Tracepoint::end(&traceChannel, "create_path_tracing_jobs");
+
   poprand::addCodelets(g);
   popops::addCodelets(g);
   g.addCodelets(args.at("codelet-path").as<std::string>() + "/codelets.gp");
@@ -357,7 +347,8 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
 
   pvti::Tracepoint::begin(&traceChannel, "build_nifs");
   auto numJobsInBatch = ipuJobs.size();
-  auto uvInput = createNifInput(g, numJobsInBatch);
+  auto pixelsPerJob = ipuJobs.front().getPixelCount();
+  auto uvInput = createNifInput(g, numJobsInBatch, pixelsPerJob);
   auto envNifs = buildNifReplicas(g, uvInput);
   pvti::Tracepoint::end(&traceChannel, "build_nifs");
 
@@ -485,11 +476,15 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
 
 // Initialise the work list (which pixels should be traced on
 // which tiles):
-void PathTracerApp::initialiseState(std::uint32_t imageWidth, std::uint32_t imageHeight, poplar::Engine& engine) {
+void PathTracerApp::initialiseState(std::uint32_t imageWidth, std::uint32_t imageHeight,
+                                    poplar::Engine& engine, const poplar::Target& target) {
+  auto jobs = createTracingJobs(imageWidth, imageHeight, target);
+  ipu_utils::logger()->info("Created worklists for {} tiles", jobs.size());
+
   // We have two pointers for tracked work: one which is to keep defunct
   // data alive whilst asynchronous host processing completes on it.
   traceState = std::make_unique<PathTracerState>(imageWidth, imageHeight);
-  traceState->work.randomiseWorkList(ipuJobs);
+  traceState->work.randomiseWorkList(jobs);
   traceState->work.getWork().active() = traceState->work.getWork().inactive();
   connectActiveWorkListStreams(engine);
 }
@@ -607,7 +602,9 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
   connectNifStreams(engine);
   progs.run(engine, "init_nif_weights");
   progs.run(engine, "init_render_settings");
-  initialiseState(imageWidth, imageHeight, engine);
+
+  // Build the tracing jobs:
+  initialiseState(imageWidth, imageHeight, engine, device.getTarget());
 
   // Setup remote user interface:
   std::unique_ptr<InterfaceServer> uiServer;
@@ -788,8 +785,6 @@ void PathTracerApp::addToolOptions(boost::program_options::options_description& 
   ("save-interval", po::value<std::uint32_t>()->default_value(1))
   ("width,w", po::value<std::uint32_t>()->default_value(256), "Output image width (total pixels).")
   ("height,h", po::value<std::uint32_t>()->default_value(256), "Output image height (total pixels).")
-  ("tile-width", po::value<std::uint32_t>()->default_value(16), "Width of tile (pixels).")
-  ("tile-height", po::value<std::uint32_t>()->default_value(16), "Height of tile (pixels).")
   ("samples,s", po::value<std::uint32_t>()->default_value(512), "Total samples to take per pixel.")
   ("samples-per-step", po::value<std::uint32_t>()->default_value(512), "Samples to take per IPU step.")
   ("interactive-samples", po::value<std::uint32_t>()->default_value(8), "Number of samples to take per IPU step during user interaction.")

@@ -9,6 +9,76 @@
 
 #include <algorithm>
 #include <random>
+#include <limits>
+
+std::size_t calculateMaxRaysPerTile(std::size_t imageWidth, std::size_t imageHeight, const poplar::Target& target) {
+  const auto numTiles = target.getNumTiles();
+  const auto numWorkers = target.getNumWorkerContexts();
+
+  // Check for performance hint:
+  if ((imageWidth * imageHeight) % (numTiles * numWorkers)) {
+    ipu_utils::logger()->warn(
+      "For best performance number of pixels in image should be divisible by {} x {} (tiles x workers).",
+      numTiles, numWorkers);
+  }
+
+  const auto totalRayCount = imageWidth * imageHeight;
+  const unsigned raysPerTile = std::ceil(totalRayCount / (float)numTiles);
+
+  // We need a minimum number of rays in each tile's worklist
+  // to avoid complicating the MultiVertex codelets:
+  return std::max(numWorkers, raysPerTile);
+}
+
+std::vector<TraceRecord> createWorkListForImage(std::size_t imageWidth, std::size_t imageHeight) {
+  std::vector<TraceRecord> workList;
+
+  // Make a worklist that contains every pixel in the image:
+  workList.reserve(imageWidth * imageHeight);
+  auto allocatedWork = 0u;
+  for (std::size_t r = 0; r < imageHeight; ++r) {
+    for (std::size_t c = 0; c < imageWidth; ++c) {
+      workList.emplace_back(c, r);
+      allocatedWork += 1;
+    }
+  }
+
+  return workList;
+}
+
+std::vector<RecordList> createTracingJobs(std::size_t imageWidth, std::size_t imageHeight, const poplar::Target& target) {
+  // Calculate number of rays each tile needs to trace
+  // to take one sample-per-pixel of the whole image:
+  const auto numTiles = target.getNumTiles();
+  const auto maxRaysPerTile = calculateMaxRaysPerTile(imageWidth, imageHeight, target);
+  auto paddedRayCount = maxRaysPerTile * numTiles;
+
+  // Make a worklist that contains every pixel in the image:
+  auto workList = createWorkListForImage(imageWidth, imageHeight);
+
+  // Pad the list with null work (these entries will be
+  // ignored during image accumulation):
+  const auto dummyCoord = std::numeric_limits<std::uint16_t>::max();
+  auto allocatedWork = workList.size();
+  while (allocatedWork < paddedRayCount) {
+    workList.emplace_back(dummyCoord, dummyCoord);
+    allocatedWork += 1;
+  }
+
+  // Each tile takes equal chunks from the list:
+  auto copyItr = workList.cbegin();
+  std::vector<RecordList> perTileWork;
+  for (auto t = 0u; t < numTiles; ++t) {
+    perTileWork.emplace_back(maxRaysPerTile);
+    auto endItr = copyItr + maxRaysPerTile;
+    std::copy(copyItr, endItr, perTileWork.back().begin());
+    copyItr = endItr;
+
+    ipu_utils::logger()->trace("Initial worklist for tile {}:\n{}", t, perTileWork.back());
+  }
+
+  return perTileWork;
+}
 
 WorkList::WorkList(std::size_t size)
     : activeWork(size),
@@ -16,11 +86,11 @@ WorkList::WorkList(std::size_t size)
 
 WorkList::~WorkList() {}
 
-WorkList::RecordList& WorkList::active() {
+RecordList& WorkList::active() {
   return activeWork;
 }
 
-WorkList::RecordList& WorkList::inactive() {
+RecordList& WorkList::inactive() {
   return inactiveWork;
 }
 
@@ -40,18 +110,17 @@ LoadBalancer::~LoadBalancer() {
 }
 
 // Randomise the inactive worklist:
-void LoadBalancer::randomiseWorkList(const IpuJobList& jobs) {
+void LoadBalancer::randomiseWorkList(const std::vector<RecordList>& jobs) {
   // Take a copy of the active worklist:
-  auto workList = work.inactive();
+  std::vector<TraceRecord> workList;
+  workList.reserve(jobs.size() * jobs.front().size());
+
+  ipu_utils::logger()->trace("Work capacity:\n{}", workList.capacity());
 
   // Fill the worklist in job order:
-  auto ray = 0u;
-  for (auto j = 0u; j < jobs.size(); ++j) {
-    const auto& spec = jobs[j].jobSpec;
-    for (unsigned r = spec.startRow; r < spec.endRow; ++r) {
-      for (unsigned c = spec.startCol; c < spec.endCol; ++c, ++ray) {
-        workList[ray] = TraceRecord(c, r);
-      }
+  for (const auto& j : jobs) {
+    for (const auto& w : j) {
+      workList.push_back(w);
     }
   }
 
@@ -77,7 +146,7 @@ void LoadBalancer::allocateWorkByPathLength(const IpuJobList& jobs) {
   ipu_utils::logger()->trace("Worklist after sort:\n{}", sorted);
 
   // Pre-allocate per tile worklists:
-  std::vector<WorkList::RecordList> perTileWork(jobs.size());
+  std::vector<RecordList> perTileWork(jobs.size());
   for (auto& t : perTileWork) {
     t.reserve(jobs[0].getPixelCount());
   }

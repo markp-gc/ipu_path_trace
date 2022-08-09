@@ -30,7 +30,8 @@ const cv::Mat& AccumulatedImage::updateLdrImage(std::size_t step, float exposure
   // Simple tone-map for the HDR image:
   const float exposureScale = std::pow(2.f, exposure);
   const float invGamma = 1.f / gamma;
-#pragma omp parallel for schedule(auto)
+
+  #pragma omp parallel for schedule(auto)
   for (auto r = 0; r < scaledImage.rows; ++r) {
     auto inPtr = scaledImage.ptr<float>(r);
     auto outPtr = ldrImage.ptr<float>(r);
@@ -56,14 +57,19 @@ void AccumulatedImage::saveImages(const std::string& fileName, std::size_t step,
 
 /// Accumulate the trace results converting from RGB to BGR in the process:
 void AccumulatedImage::accumulate(const std::vector<TraceRecord>& traces) {
-#pragma omp parallel for schedule(auto)
+
+  #pragma omp parallel for schedule(auto)
   for (std::size_t i = 0; i < traces.size(); ++i) {
     auto& t = traces[i];
     auto c = t.u;
     auto r = t.v;
-    auto scale = 1.f / t.sampleCount;
-    cv::Vec3f bgr(t.b, t.g, t.r);
-    hdrImage.at<cv::Vec3f>(r, c) += bgr * scale;
+    if (c >= hdrImage.cols || r >= hdrImage.rows) {
+      // Skip as this entry is just worklist padding
+    } else {
+      auto scale = 1.f / t.sampleCount;
+      cv::Vec3f bgr(t.b, t.g, t.r);
+      hdrImage.at<cv::Vec3f>(r, c) += bgr * scale;
+    }
   }
 }
 

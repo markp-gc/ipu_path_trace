@@ -58,7 +58,7 @@ struct PathTracerApp : public ipu_utils::BuilderInterface {
 
 private:
   // Create a tensor for the UV neural environment map inputs:
-  poplar::Tensor createNifInput(poplar::Graph& g, std::size_t numJobsInBatch);
+  poplar::Tensor createNifInput(poplar::Graph& g, std::size_t numJobsInBatch, std::size_t pixelsPerJob);
 
   void loadNifModels(std::size_t numIpus, const std::string& assetPath);
   void connectNifStreams(poplar::Engine& engine);
@@ -66,7 +66,7 @@ private:
   std::pair<poplar::program::Sequence, poplar::program::Sequence>
   buildEnvironmentNif(poplar::Graph& g, std::unique_ptr<NifModel>& model, poplar::Tensor input, poplar::Tensor& result);
 
-  void initialiseState(std::uint32_t imageWidth, std::uint32_t imageHeight, poplar::Engine& engine);
+  void initialiseState(std::uint32_t imageWidth, std::uint32_t imageHeight, poplar::Engine& engine, const poplar::Target& target);
   void defunctState(std::uint32_t imageWidth, std::uint32_t imageHeight, poplar::Engine& engine);
   void connectActiveWorkListStreams(poplar::Engine& engine);
 

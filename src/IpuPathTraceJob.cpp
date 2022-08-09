@@ -31,8 +31,7 @@ std::vector<Interval> splitTilePixelsOverWorkers(std::size_t pixelCount, std::si
   const auto raysPerWorker = pixelCount / workers;
   const auto leftOvers = pixelCount % workers;
   std::vector<std::size_t> work(workers, raysPerWorker);
-
-  ipu_utils::logger()->info("Splitting work: rays: {} raysPerWorker: {}", pixelCount, raysPerWorker);
+  ipu_utils::logger()->trace("Worker split: total rays: {} rays per-worker: {} leftovers: {}", pixelCount, raysPerWorker, leftOvers);
 
   // Distribute leftovers amongst workers:
   for (auto i = 0u; i < leftOvers; ++i) {
@@ -48,6 +47,7 @@ std::vector<Interval> splitTilePixelsOverWorkers(std::size_t pixelCount, std::si
     intervals.emplace_back(start, end);
     start = end;
   }
+
   return intervals;
 }
 
@@ -69,10 +69,10 @@ poplar::Tensor IpuPathTraceJob::addScalar(poplar::Graph& graph, poplar::VertexRe
 
 IpuPathTraceJob::~IpuPathTraceJob() {}
 
-IpuPathTraceJob::IpuPathTraceJob(TraceTileJob spec,
+IpuPathTraceJob::IpuPathTraceJob(std::size_t maxRayCount,
                                  const boost::program_options::variables_map& args,
                                  std::size_t core)
-    : jobSpec(spec),
+    : maxPixelCount(maxRayCount),
       ipuCore(core) {}
 
 void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
