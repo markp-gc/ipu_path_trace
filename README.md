@@ -75,7 +75,7 @@ This should build all the submodules and the application.
 
 The application needs a neural HDRI model to run. There is an example included in the repository that you can try:
 ```
-./ipu_trace --assets ../nif_models/urban_alley_01_4k_fp16_yuv/assets.extra/ -w 792 -h 720 --tile-width 22 --tile-height 18 -s 100000 --samples-per-step 300 --ipus 1 --defer-attach -o image.png --save-interval 10 --save-exe pt_graph
+./ipu_trace --assets ../nif_models/urban_alley_01_4k_fp16_yuv/assets.extra/ -w 1104 -h 1000 -s 100000 --samples-per-step 300 --ipus 1 --defer-attach -o image.png --save-interval 10 --save-exe pt_graph
 ```
 The renderer saves low and high dynamic range outputs intermittently (`--save-interval`) in this case: `image.png` and `image.exr`.
 
@@ -96,10 +96,10 @@ The trained keras model contains a subfolder called `assets.extra`, give that pa
 
 ## Remote User Interface
 
-The application supports a remote user interface that allows you to change render settings and interactively preview the results. This is available in a separate repository here: [remote render user interface](https://github.com/markp-gc/remote_render_ui). If you specify a port in the path tracer options using `--ui-port` then the application will wait for the remote-ui to connect (after graph compilation/load). E.g. to run the graph you compiled above and launch in interactive mode just run:
+The application supports a remote user interface that allows you to change render settings and interactively preview the results. This is available in a separate repository here: [remote render user interface](https://github.com/markp-gc/remote_render_ui). If you specify a port in the path tracer options using `--ui-port` then the application will wait for the remote-ui to connect (after graph compilation/load). E.g. to load the path-tracer compute that graph you compiled above and launch in interactive mode just run:
 
 ```
-./ipu_trace --assets ../nif_models/urban_alley_01_4k_fp16_yuv/assets.extra/ -w 792 -h 720 --tile-width 22 --tile-height 18 -s 100000 --ipus 1 --defer-attach -o image.png --save-interval 10 --load-exe pt_graph --samples-per-step 64 --ui-port 5000
+./ipu_trace --assets ../nif_models/urban_alley_01_4k_fp16_yuv/assets.extra/ -w 1104 -h 1000 -s 100000 --ipus 1 --defer-attach -o image.png --save-interval 10 --load-exe pt_graph --samples-per-step 64 --ui-port 5000
 ```
 
 (Note that we are now passing `--load-exe` and the peak samples per step was lowered to reduce interaction latency). Once you see the following log line: `User interface server listening on port 5000` you can connect the remote user interface from your local machine.
