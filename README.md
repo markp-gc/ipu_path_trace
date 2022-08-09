@@ -96,7 +96,7 @@ The trained keras model contains a subfolder called `assets.extra`, give that pa
 
 ## Remote User Interface
 
-The application supports a remote user interface that allows you to change render settings and interactively preview the results. This is available in a separate repository here: [remote render user interface](https://github.com/markp-gc/remote_render_ui). If you specify a port in the path tracer options using `--ui-port` then the application will wait for the remote-ui to connect (after graph compilation/load). E.g. to load the path-tracer compute that graph you compiled above and launch in interactive mode just run:
+The application supports a remote user interface that allows you to change render settings and interactively preview the results. This is available in a separate repository here: [remote render user interface](https://github.com/markp-gc/remote_render_ui). If you specify a port in the path tracer options using `--ui-port` then the application will wait for the remote-ui to connect (after graph compilation/load). E.g. to load the path-tracer compute graph that you compiled above and launch in interactive mode just run:
 
 ```
 ./ipu_trace --assets ../nif_models/urban_alley_01_4k_fp16_yuv/assets.extra/ -w 1104 -h 1000 -s 100000 --ipus 1 --defer-attach -o image.png --save-interval 10 --load-exe pt_graph --samples-per-step 64 --ui-port 5000
