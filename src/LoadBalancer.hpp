@@ -48,9 +48,8 @@ struct LoadBalancer {
 
   void randomiseWorkList(const std::vector<RecordList>& jobs);
   void allocateWorkByPathLength(const IpuJobList& jobs);
-  void clearInactiveAccumulators();
+  std::size_t clearInactiveAccumulators();
   void clearActiveAccumulators();
-  std::size_t sumTotalInactivePathSegments();
 
 private:
   WorkList work;

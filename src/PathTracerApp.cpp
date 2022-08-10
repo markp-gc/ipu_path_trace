@@ -537,6 +537,7 @@ PathTracerApp::processUserInput(
     return InterfaceServer::Status::Disconnected;
   } else {
     if (!state.newNif.empty()) {
+      pvti::Tracepoint scopedTrace2(&traceChannel, "load_nif_file");
       // Load of a new NIF was requested:
       ipu_utils::logger()->info("Loading NIF: {}", state.newNif);
       loadNifModels(models.size(), state.newNif);
@@ -546,7 +547,7 @@ PathTracerApp::processUserInput(
       progs.run(engine, "init_nif_weights");
     }
 
-    pvti::Tracepoint scopedTrace2(&traceChannel, "reset_host_render_state");
+    pvti::Tracepoint scopedTrace3(&traceChannel, "reset_host_render_state");
     defunctState(imageWidth, imageHeight, engine);
 
     return InterfaceServer::Status::Restart;
@@ -730,10 +731,8 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
         workPtr->allocateWorkByPathLength(ipuJobs);
       }
 
-      totalRays = workPtr->sumTotalInactivePathSegments();
-
       pvti::Tracepoint::begin(&hostTraceChannel, "clear_accumulators");
-      workPtr->clearInactiveAccumulators();
+      totalRays = workPtr->clearInactiveAccumulators();
       pvti::Tracepoint::end(&hostTraceChannel, "clear_accumulators");
 
       // If there is a UI server we do not save

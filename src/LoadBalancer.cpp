@@ -191,30 +191,25 @@ void LoadBalancer::allocateWorkByPathLength(const IpuJobList& jobs) {
   work.inactive() = sorted;
 }
 
-/// Clear the accumulators in the inactive work list:
-std::size_t LoadBalancer::sumTotalInactivePathSegments() {
+/// Clear the accumulators in the inactive work list and
+/// simultaneously sum the pathlengths using a parallel
+/// reduction. Doing these in combination is significantly
+/// faster than separating them.
+std::size_t LoadBalancer::clearInactiveAccumulators() {
   auto& list = work.inactive();
 
   std::size_t sum = 0;
 #pragma omp parallel for reduction(+ \
                                    : sum) schedule(auto)
   for (std::size_t i = 0; i < list.size(); ++i) {
-    sum += list[i].pathLength;
-  }
-
-  return sum;
-}
-
-/// Clear the accumulators in the inactive work list:
-void LoadBalancer::clearInactiveAccumulators() {
-  auto& list = work.inactive();
-#pragma omp parallel for schedule(auto)
-  for (std::size_t i = 0; i < list.size(); ++i) {
     auto& t = list[i];
+    sum += t.pathLength;
     t.r = t.g = t.b = 0.f;
     t.pathLength = 0;
     t.sampleCount = 0;
   }
+
+  return sum;
 }
 
 /// Clear the accumulators in the inactive work list:
