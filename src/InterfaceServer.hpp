@@ -3,45 +3,79 @@
 #pragma once
 
 #include "ipu_utils.hpp"
+#include "AsyncTask.hpp"
 
 #include <PacketComms.h>
 #include <PacketSerialisation.h>
 #include <VideoLib.h>
 #include <network/TcpSocket.h>
+#include <opencv2/imgproc.hpp>
 
 #include <atomic>
 #include <chrono>
 #include <iostream>
 
 #include <cereal/types/string.hpp>
+#include <cereal/types/vector.hpp>
 
 namespace {
 
-const std::vector<std::string> packetTypes{
-    "stop",            // Tell server to stop rendering and exit (client -> server)
-    "detach",          // Detach the remote-ui but continue: server can destroy the
-                       // communication interface and continue (client -> server)
-    "progress",        // Send render progress (server -> client)
-    "sample_rate",     // Send throughput measurement (server -> client)
-    "env_rotation",    // Update environment light rotation (client -> server)
-    "exposure",        // Update tone-map exposure (client -> server)
-    "gamma",           // Update tone-map gamma (client -> server)
-    "fov",             // Update field-of-view (client -> server)
-    "load_nif",        // Insruct server to load a new
-                       // NIF environemnt light (client -> server)
-    "render_preview",  // used to send compressed video packets
-                       // for render preview (server -> client)
+const std::vector<std::string> packetTypes {
+  "stop",            // Tell server to stop rendering and exit (client -> server)
+  "detach",          // Detach the remote-ui but continue: server can destroy the
+                      // communication interface and continue (client -> server)
+  "progress",        // Send render progress (server -> client)
+  "sample_rate",     // Send throughput measurement (server -> client)
+  "env_rotation",    // Update environment light rotation (client -> server)
+  "exposure",        // Update tone-map exposure (client -> server)
+  "gamma",           // Update tone-map gamma (client -> server)
+  "fov",             // Update field-of-view (client -> server)
+  "load_nif",        // Insruct server to load a new
+                      // NIF environemnt light (client -> server)
+  "render_preview",  // used to send compressed video packets
+                      // for render preview (server -> client)
+  "hdr_header",      // Header for sending full uncompressed HDR
+                      // image data (server -> client).
+  "hdr_packet",      // Packet containing a portion of the full uncompressed
+                      // HDR image (server -> client).
 };
+
+// Struct and serialize function for HDR
+// image data header packet.
+struct HdrHeader {
+  std::int32_t width;  // image width
+  std::int32_t height; // image height
+  // Data will be broken into this many packets
+  // for transmission so that the comms-link is not
+  // blocking on a single giant image packet:
+  std::uint32_t packets;
+};
+
+template <typename T>
+void serialize(T& ar, HdrHeader& s) {
+  ar(s.width, s.height, s.packets);
+}
+
+
+struct HdrPacket {
+  std::uint32_t id;
+  std::vector<float> data;
+};
+
+template <typename T>
+void serialize(T& ar, HdrPacket& p) {
+  ar(p.id, p.data);
+}
 
 // Struct and serialize function to send
 // telemetry in a single packet:
-struct SamplesRates {
+struct SampleRates {
   float pathRate;
   float rayRate;
 };
 
 template <typename T>
-void serialize(T& ar, SamplesRates& s) {
+void serialize(T& ar, SampleRates& s) {
   ar(s.pathRate, s.rayRate);
 }
 
@@ -222,7 +256,7 @@ public:
 
   void updateSampleRate(float pathRate, float rayRate) {
     if (sender) {
-      serialise(*sender, "sample_rate", SamplesRates{pathRate, rayRate});
+      serialise(*sender, "sample_rate", SampleRates{pathRate, rayRate});
     }
   }
 
@@ -234,7 +268,61 @@ public:
     }
   }
 
+  bool startSendingRawImage(cv::Mat&& rawImage) {
+    // Wait for any previous tasks to complete:
+    if (sendHdrTask.isRunning()) {
+      ipu_utils::logger()->debug("Large data transfer still in progress, dropping request");
+      return false;
+    }
+
+    // Even if the thread has finished we must still join it:
+    sendHdrTask.waitForCompletion();
+
+    // We send one whole row of image data in each packet:
+    rawImage.copyTo(hdrImage);
+    if (hdrImage.channels() != 3) {
+      throw std::logic_error("Only transmission of 3 channel raw data is supported.");
+    }
+    auto chunkSize = hdrImage.cols * hdrImage.channels();
+    const std::uint32_t floats = hdrImage.cols * hdrImage.rows * hdrImage.channels();
+    const std::uint32_t chunks = floats / chunkSize;
+
+    // Send the header packet:
+    if (sender) {
+      ipu_utils::logger()->debug("Initiating large data transfer: {} chunks", chunks);
+      serialise(*sender, "hdr_header", HdrHeader{hdrImage.cols, hdrImage.rows, chunks});
+    } else {
+      ipu_utils::logger()->debug("No muxer available: large data transfer aborted.");
+      return false;
+    }
+
+    // Launch async task to send chunks in the background:
+    sendHdrTask.run([&, floats, chunks, chunkSize] () {
+      // Copy data into a vector for now, can optimise later:
+      std::vector<float> data(chunkSize);
+      ipu_utils::logger()->debug("Data size: {} chunksize: {}", data.size(), chunkSize);
+
+      cv::cvtColor(hdrImage, hdrImage, cv::COLOR_BGR2RGB);
+
+      auto startTime = std::chrono::steady_clock::now();
+      for (std::uint32_t c = 0; c < chunks; ++c) {
+        float* sendPtr = hdrImage.ptr<float>(c);
+        std::copy(sendPtr, sendPtr + data.size(), data.begin());
+        serialise(*sender, "hdr_packet", HdrPacket{c, data});
+        ipu_utils::logger()->debug("large transfer: sent chunk {} / {}", c + 1, chunks);
+        // Throttle the send rate to maintain interactivity:
+        std::this_thread::sleep_for(2ms);
+      }
+      auto endTime = std::chrono::steady_clock::now();
+      auto secs = std::chrono::duration<double>(endTime - startTime).count();
+      auto mib = floats * sizeof(float) / (1024.f * 1024.f);
+      ipu_utils::logger()->info("{} MiB raw image transmitted in {} seconds", mib, secs);
+    });
+    return true;
+  }
+
   virtual ~InterfaceServer() {
+    sendHdrTask.waitForCompletion();
     stop();
   }
 
@@ -249,4 +337,6 @@ private:
   std::unique_ptr<PacketMuxer> sender;
   std::unique_ptr<LibAvWriter> videoStream;
   State state;
+  cv::Mat hdrImage;
+  AsyncTask sendHdrTask;
 };

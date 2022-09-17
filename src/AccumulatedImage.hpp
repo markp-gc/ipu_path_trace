@@ -24,6 +24,9 @@ struct AccumulatedImage {
 
   void reset();
 
+  /// Return a copy of the raw HDR image:
+  cv::Mat getHdrImage() const { return hdrImage; }
+
 private:
   cv::Mat hdrImage;
   cv::Mat image;
