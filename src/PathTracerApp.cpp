@@ -741,7 +741,7 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
         if (uiServer) {
           // If there is a UI server we start transmitting full
           // uncompressed image data at the save interval.
-          uiServer->startSendingRawImage(filmPtr->getHdrImage());
+          uiServer->startSendingRawImage(filmPtr->getHdrImage(), step);
         } else {
           pvti::Tracepoint scopedTrace(&hostTraceChannel, "save_images");
           filmPtr->saveImages(fileName, step, state.exposure, state.gamma);

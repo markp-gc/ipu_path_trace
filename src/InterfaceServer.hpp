@@ -268,7 +268,7 @@ public:
     }
   }
 
-  bool startSendingRawImage(cv::Mat&& rawImage) {
+  bool startSendingRawImage(cv::Mat&& rawImage, std::size_t step) {
     // Wait for any previous tasks to complete:
     if (sendHdrTask.isRunning()) {
       ipu_utils::logger()->debug("Large data transfer still in progress, dropping request");
@@ -279,7 +279,7 @@ public:
     sendHdrTask.waitForCompletion();
 
     // We send one whole row of image data in each packet:
-    rawImage.copyTo(hdrImage);
+    hdrImage = rawImage * (1.f / step);
     if (hdrImage.channels() != 3) {
       throw std::logic_error("Only transmission of 3 channel raw data is supported.");
     }
