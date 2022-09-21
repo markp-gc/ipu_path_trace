@@ -18,6 +18,12 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -Og")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 execute_process(COMMAND bash "-c" "popc --version | cut -d ' ' -f3 | head -1" OUTPUT_VARIABLE POPLAR_VERSION)
+string(REPLACE "." ";" VERSION_LIST ${POPLAR_VERSION})
+list(GET VERSION_LIST 0 POPLAR_VERSION_MAJOR)
+list(GET VERSION_LIST 1 POPLAR_VERSION_MINOR)
+list(GET VERSION_LIST 2 POPLAR_VERSION_PATCH)
+message(STATUS "Detected Poplar version ${POPLAR_VERSION_MAJOR}.${POPLAR_VERSION_MINOR}.${POPLAR_VERSION_PATCH}")
+
 # With Poplar SDK 2.5.0 we need to disable virtual graphs due to an SDK bug:
 if(${POPLAR_VERSION} MATCHES "2.5.?")
   message(WARNING "Poplar version 2.5.x detected. Enabling workaround for virtual graph bug.")
@@ -26,7 +32,7 @@ endif(${POPLAR_VERSION} MATCHES "2.5.?")
 
 file(GLOB IPU_TRACE_SRC ${CMAKE_SOURCE_DIR}/src/*.hpp ${CMAKE_SOURCE_DIR}/src/*.cpp)
 
-message(STATUS "LIBRARY: ${HDF5_LIBRARIES}")
+message(STATUS "HDF5 LIBRARIES: ${HDF5_LIBRARIES}")
 
 # Following projects are required for the experimental user-interface:
 

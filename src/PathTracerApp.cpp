@@ -66,7 +66,9 @@ void PathTracerApp::init(const boost::program_options::variables_map& options) {
   // Read the metadata saved with the model:
   auto numIpus = args.at("ipus").as<std::size_t>();
   auto assetPath = args.at("assets").as<std::string>();
-  loadNifModels(numIpus, assetPath);
+  if (!loadNifModels(numIpus, assetPath)) {
+    throw std::runtime_error("Could not load NIF model.");
+  }
 }
 
 ipu_utils::RuntimeConfig PathTracerApp::getRuntimeConfig() const {
@@ -101,16 +103,23 @@ poplar::Tensor PathTracerApp::createNifInput(poplar::Graph& g, std::size_t numJo
   return uvInput;
 }
 
-void PathTracerApp::loadNifModels(std::size_t numIpus, const std::string& assetPath) {
-  // Load new NIFs and reconnect the streams:
-  const auto metaFile = assetPath + "/nif_metadata.txt";
-  const auto h5File = assetPath + "/converted.hdf5";
-  // The host-side data is shared among replicas:
-  auto nifData = std::make_shared<NifModel::Data>(h5File, metaFile);
-  models.clear();
-  for (auto c = 0u; c < numIpus; ++c) {
-    models.push_back(std::make_unique<NifModel>(nifData, "env_nif_ipu" + std::to_string(c)));
+bool PathTracerApp::loadNifModels(std::size_t numIpus, const std::string& assetPath) {
+  try {
+    // Load new NIFs and reconnect the streams:
+    const auto metaFile = assetPath + "/nif_metadata.txt";
+    const auto h5File = assetPath + "/converted.hdf5";
+    // The host-side data is shared among replicas:
+    auto nifData = std::make_shared<NifModel::Data>(h5File, metaFile);
+    models.clear();
+    for (auto c = 0u; c < numIpus; ++c) {
+      models.push_back(std::make_unique<NifModel>(nifData, "env_nif_ipu" + std::to_string(c)));
+    }
+  } catch (std::exception& e) {
+    ipu_utils::logger()->error("Could not load NIF model from '{}'. Exception: {}", assetPath, e.what());
+    return false;
   }
+
+  return true;
 }
 
 void PathTracerApp::connectNifStreams(poplar::Engine& engine) {
@@ -540,11 +549,11 @@ PathTracerApp::processUserInput(
       pvti::Tracepoint scopedTrace2(&traceChannel, "load_nif_file");
       // Load of a new NIF was requested:
       ipu_utils::logger()->info("Loading NIF: {}", state.newNif);
-      loadNifModels(models.size(), state.newNif);
-
-      // Connect new NIF streams and upload the weights:
-      connectNifStreams(engine);
-      progs.run(engine, "init_nif_weights");
+      if (loadNifModels(models.size(), state.newNif)) {
+        // Connect new NIF streams and upload the weights:
+        connectNifStreams(engine);
+        progs.run(engine, "init_nif_weights");
+      }
     }
 
     pvti::Tracepoint scopedTrace3(&traceChannel, "reset_host_render_state");

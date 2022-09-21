@@ -41,6 +41,7 @@ Poplar SDK version support:
 |< 2.5| No |
 | 2.5 | Limited - Single IPU only |
 | 2.6 | Yes |
+| 3.0 | Yes |
 
 ### Build a Docker Image
 

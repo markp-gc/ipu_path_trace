@@ -60,7 +60,7 @@ private:
   // Create a tensor for the UV neural environment map inputs:
   poplar::Tensor createNifInput(poplar::Graph& g, std::size_t numJobsInBatch, std::size_t pixelsPerJob);
 
-  void loadNifModels(std::size_t numIpus, const std::string& assetPath);
+  bool loadNifModels(std::size_t numIpus, const std::string& assetPath);
   void connectNifStreams(poplar::Engine& engine);
 
   std::pair<poplar::program::Sequence, poplar::program::Sequence>
