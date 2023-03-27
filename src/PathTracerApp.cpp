@@ -171,7 +171,7 @@ PathTracerApp::buildEnvironmentNif(poplar::Graph& g, std::unique_ptr<NifModel>& 
   auto nifGraphFunc = g.addFunction(
       model->buildInference(g, matmulOptions, cache, optimiseStreamMemory, inputSlice));
 
-  // Analyse the mode for the full batch size per replica:
+  // Analyse the model for the full batch size per replica:
   model->analyseModel(model->getBatchSize() * closestFactor);
 
   auto nifResult = model->getOutput();
@@ -397,7 +397,7 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
   mapTensorOverJobs(g, primaryRays);
 
   for (auto j = 0u; j < ipuJobs.size(); ++j) {
-    // Create inputs: input to job on each tile is a slice of there global tensors:
+    // Create inputs: input to job on each tile is a slice of the global tensors:
     auto uvInputSlice = uvInput.slice(j, j + 1, 1);
     auto nifResultSlice = envNifs.result.slice(j, j + 1, 0);
     auto aaNoiseFlatSlice = aaNoise.slice(j, j + 1, 0).flatten();

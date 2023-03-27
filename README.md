@@ -1,5 +1,7 @@
 # Monte-Carlo Path Tracing on Graphcore IPUs
 
+NOTE: This version of the IPU ray/path-tracer is no longer longer actively developed. An improved version is being developed here: [IPU Ray Library](https://github.com/markp-gc/ipu_ray_lib).
+
 ![Example output image](images/example.png "Spheres with neural environment lighting path-traced on IPU.")
 
 This is an experimental physically based renderer, it is experimental/novel in a few different ways:
@@ -8,8 +10,6 @@ This is an experimental physically based renderer, it is experimental/novel in a
   - The neural network and path tracer execute entirely out of on-chip SRAM.
 - It is implemented in Poplar (a C++ graph programming framework design primarily as a backend for ML frameworks).
 - It is a cloud renderer (since most IPU hardware is in remote data centres) and supports a remote user interface for interactive render preview.
-
-This is a heavily modified fork of the simple path tracing example from [Graphcore's examples repository](https://github.com/graphcore/examples). 
 
 ### Repo structure
 
@@ -43,6 +43,7 @@ Poplar SDK version support:
 | 2.6 | Yes |
 | 3.0 | Yes |
 | 3.1 | Yes |
+| 3.2 | Yes |
 
 ### Build a Docker Image
 
