@@ -44,6 +44,7 @@ Poplar SDK version support:
 | 3.0 | Yes |
 | 3.1 | Yes |
 | 3.2 | Yes |
+| 3.3 | Yes |
 
 ### Build a Docker Image
 
