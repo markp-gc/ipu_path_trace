@@ -63,6 +63,6 @@ inline void logTensorInfo(poplar::Graph& g, poplar::Tensor t) {
 }
 
 inline std::ostream& operator<<(std::ostream& s, const TraceRecord& t) {
-  s << "{ u:" << t.u << " v:" << t.v << " length:" << t.pathLength << " samples:" << t.sampleCount << " }";
+  s << "{ u:" << t.u << " v:" << t.v << " }";
   return s;
 }

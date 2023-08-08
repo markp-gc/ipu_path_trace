@@ -10,6 +10,7 @@ find_package(Boost REQUIRED COMPONENTS program_options)
 find_package(OpenCV REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(HDF5 REQUIRED COMPONENTS CXX)
+find_package(Eigen3 REQUIRED NO_MODULE)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -46,6 +47,7 @@ include_directories(
   ${CMAKE_SOURCE_DIR}/external
   ${CMAKE_SOURCE_DIR}/src
   ${HDF5_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIR}
   ${NANOGUI_EXTRA_INCS}
   ${PACKETCOMMS_INCLUDES}
   ${VIDEOLIB_INCLUDES}

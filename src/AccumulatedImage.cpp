@@ -21,7 +21,7 @@ AccumulatedImage::AccumulatedImage(std::size_t w, std::size_t h)
 AccumulatedImage::~AccumulatedImage() {}
 
 const cv::Mat& AccumulatedImage::updateLdrImage(std::size_t step, float exposure, float gamma) {
-  cv::Mat scaledImage = hdrImage * 1.f / step;
+  cv::Mat& scaledImage = hdrImage;
 
   // Allocate low dynamic range image of same dimensions:
   cv::Mat ldrImage(scaledImage.rows, scaledImage.cols, CV_32FC3);
@@ -57,7 +57,6 @@ void AccumulatedImage::saveImages(const std::string& fileName, std::size_t step,
 
 /// Accumulate the trace results converting from RGB to BGR in the process:
 void AccumulatedImage::accumulate(const std::vector<TraceRecord>& traces) {
-
   #pragma omp parallel for schedule(auto)
   for (std::size_t i = 0; i < traces.size(); ++i) {
     auto& t = traces[i];
@@ -66,9 +65,7 @@ void AccumulatedImage::accumulate(const std::vector<TraceRecord>& traces) {
     if (c >= hdrImage.cols || r >= hdrImage.rows) {
       // Skip as this entry is just worklist padding
     } else {
-      auto scale = 1.f / t.sampleCount;
-      cv::Vec3f bgr(t.b, t.g, t.r);
-      hdrImage.at<cv::Vec3f>(r, c) += bgr * scale;
+      hdrImage.at<cv::Vec3f>(r, c) = cv::Vec3f((float)t.b, (float)t.g, (float)t.r);
     }
   }
 }

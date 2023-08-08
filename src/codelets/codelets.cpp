@@ -103,56 +103,6 @@ public:
   bool compute() {
     const Vec zero(0.f, 0.f, 0.f);
     const Vec one(1.f, 1.f, 1.f);
-    const auto X = Vec(1.f, 0.f, 0.f);
-    const auto Y = Vec(0.f, 1.f, 0.f);
-    const auto Z = Vec(0.f, 0.f, 1.f);
-
-    // The scene is currently hard coded here:
-    light::Sphere spheres[] = {
-      light::Sphere(Vec(-1.8575f, -0.98714f, -3.6f), 0.6f), // left
-      light::Sphere(Vec(0.74795f, -0.55f, -4.3816f), 1.05f), // middle
-      light::Sphere(Vec(1.9929f, -1.08666f, -3.23), 0.5f), // right
-      light::Sphere(Vec(-0.19931, -1.183f, -2.75f), 0.4f), // front diffuse part
-      light::Sphere(Vec(-0.19931, -1.183f, -2.75f), 0.4001f), // front clear-coat part
-      //light::Sphere(Vec(12.f, 8.f, -5.3f), .3f) // light
-    };
-
-    light::Disc discs[] = {
-      light::Disc(Y, Vec(0.f, -1.6f, -5.22f), 3.5f)
-    };
-
-    constexpr float lightStrength = 10000.f;
-    const auto lightW = Vec(1.f, 1.f, 1.f) * lightStrength;
-
-    const float colourGain = 2.f;
-    const auto sphereColour = Vec(1.f, .89f, .55f) * colourGain;
-    const auto clearCoatColour = Vec(.8f, .06f, .391f) * colourGain;
-    const auto floorColour = Vec(.98f, .76f, .66f) * colourGain;
-    const auto glassTint = Vec(0.75f, 0.75f, 0.75f);
-    constexpr auto specular = light::Material::Type::specular;
-    constexpr auto refractive = light::Material::Type::refractive;
-    constexpr auto diffuse = light::Material::Type::diffuse;
-    constexpr auto numObjects = std::size(spheres) + std::size(discs);
-    light::Scene<numObjects> scene({
-        light::Object(&spheres[0], sphereColour, zero, diffuse),
-        light::Object(&spheres[1], one, zero, specular),
-        light::Object(&spheres[2], glassTint, zero, refractive),
-        light::Object(&spheres[3], clearCoatColour, zero, diffuse),
-        light::Object(&spheres[4], one, zero, refractive),
-        //light::Object(&spheres[3], zero, lightW, diffuse), // light
-        light::Object(&discs[0], floorColour, zero, diffuse), // floor disc
-    });
-
-    // Make a lambda to consume random numbers from the buffer:
-    std::size_t randomIndex = 0;
-    auto rng = [&] () {
-      const half value = uniform_0_1[randomIndex];
-      randomIndex += 1;
-      if (randomIndex == uniform_0_1.size()) {
-        randomIndex = 0;
-      }
-      return value;
-    };
 
     // Loop over the camera rays:
     const auto raysSize = (cameraRays.size() >> 1) << 1;
@@ -161,7 +111,7 @@ public:
       // sequence of x, y coords with implicit z-direction of -1:
       Vec rayDir((float)cameraRays[r], (float)cameraRays[r+1], (float)-1.f);
       light::Ray ray(zero, rayDir);
-      std::uint32_t depth = 0;
+      const std::uint32_t depth = 1;
 
       // Store the contributions per ray by wrapping the raw vertex data with a stack data structure:
       const std::size_t maxContributions = contributionData[c].size() / sizeof(light::Contribution);
@@ -169,57 +119,8 @@ public:
       WrappedArray<light::Contribution> contributions(maxContributions, contributionDataPtr);
 
       // Trace rays through the scene, recording contribution values and type.
-      bool hitEmitter = false;
-      while (!contributions.full()) {
-        // Russian roulette ray termination:
-        float rrFactor = 1.f;
-        if (depth >= rouletteDepth) {
-          bool stop;
-          std::tie(stop, rrFactor) = light::rouletteWeight((float)rng(), (float)*stopProb);
-          if (stop) { break; }
-        }
-
-        // Intersect the ray with the whole scene, advancing it to the hit point:
-        const auto intersection = scene.intersect(ray);
-        if (!intersection) {
-          // Record ray-direction with escaped rays so that the environment lighting can
-          // be deferred until later.
-          contributions.push_back({ray.direction, rrFactor, light::Contribution::Type::ESCAPED});
-          hitEmitter = true;
-          break;
-        }
-
-        if (intersection.material->emissive) {
-          contributions.push_back({intersection.material->emission, rrFactor, light::Contribution::Type::EMIT});
-          hitEmitter = true;
-          break;
-        }
-
-        // Sample a new ray based on material type:
-        if (intersection.material->type == diffuse) {
-          const float sample1 = (float)rng();
-          const float sample2 = (float)rng();
-          const auto result =
-            light::diffuse(ray, intersection.normal, intersection, rrFactor, sample1, sample2);
-          contributions.push_back(result);
-        } else if (intersection.material->type == specular) {
-          light::reflect(ray, intersection.normal);
-          contributions.push_back({zero, rrFactor, light::Contribution::Type::SPECULAR});
-        } else if (intersection.material->type == refractive) {
-          const float ri = (float)*refractiveIndex;
-          auto refracted = light::refract(ray, intersection.normal, ri, (float)rng());
-          auto tint = refracted ? intersection.material->colour : one;
-          contributions.push_back({tint, 1.15f * rrFactor, light::Contribution::Type::REFRACT});
-        }
-
-        depth += 1;
-      }
-
-      // Paths will only have a non-zero contribution if they hit a light source at some point:
-      if (hitEmitter == false) {
-        // No contribution so overwrite end of array with end marker:
-        contributions.back() = light::Contribution{zero, 0.f, light::Contribution::Type::END};
-      }
+      const bool hitEmitter = true;
+      contributions.push_back({ray.direction, 1.f, light::Contribution::Type::ESCAPED});
     } // end loop over camera rays
 
     return true;
@@ -249,8 +150,6 @@ public:
     for (auto r = 0u; r < numRays; ++r, ++traces) {
       auto contributions = makeArrayWrapper<const light::Contribution>(contributionData[r]);
       const bool pathContributes = resizeContributionArray(contributions);
-
-      traces->pathLength += contributions.size();
 
       if (pathContributes) {
         bool debug = false;
@@ -297,7 +196,6 @@ public:
         traces->b += total.z;
       }
 
-      traces->sampleCount += 1;
     } // end loop over camera rays
 
     return true;

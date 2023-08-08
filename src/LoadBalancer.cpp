@@ -129,97 +129,44 @@ void LoadBalancer::randomiseWorkList(const std::vector<RecordList>& jobs) {
     }
   }
 
-  // Random shuffle the work list:
-  auto workSeed = 142u;
-  std::mt19937 g(workSeed);
-  std::shuffle(workList.begin(), workList.end(), g);
-
   // Overwrite the inactive worklist:
   work.inactive() = workList;
 }
 
 void LoadBalancer::allocateWorkByPathLength(const IpuJobList& jobs) {
-  // Sort a copy of the inactive work list by path length:
+  // Sort a copy of the inactive work list by coords:
   auto sorted = work.inactive();
 
   ipu_utils::logger()->trace("Worklist before sort:\n{}", sorted);
 
   std::sort(sorted.begin(), sorted.end(), [](const TraceRecord& a, const TraceRecord& b) -> bool {
-    return a.pathLength < b.pathLength;
+    return a.u < b.u || a.v < b.v;
   });
 
   ipu_utils::logger()->trace("Worklist after sort:\n{}", sorted);
 
-  // Pre-allocate per tile worklists:
-  std::vector<RecordList> perTileWork(jobs.size());
-  for (auto& t : perTileWork) {
-    t.reserve(jobs[0].getPixelCount());
-  }
-
-  // Iterators for longest and shortest paths:
-  auto shortItr = sorted.begin();
-  auto longItr = sorted.end() - 1;
-
-  // Allocate work to tiles by taking pairs of items from both ends of the sorted list.
-  // I.e. the tile that takes the longest path from the last render step also takes the
-  // shortest path, and so on until the worklist is exhausted:
-  ipu_utils::logger()->info("Load balancing started ({} work items)", sorted.size());
-  ipu_utils::logger()->info("Path length min/max: {}/{}", shortItr->pathLength, longItr->pathLength);
-  while (true) {
-    for (auto& t : perTileWork) {
-      // Take 2 work items, one from each end of queue:
-      t.push_back(*shortItr);
-      t.push_back(*longItr);
-      ++shortItr;
-      --longItr;
-    }
-    if (longItr <= shortItr) {
-      break;
-    }
-  }
-  ipu_utils::logger()->info("Load balancing finished");
-
-  // Flatten the new worklist by tiles:
-  auto itr = sorted.begin();
-  for (auto& t : perTileWork) {
-    for (auto& w : t) {
-      *itr = w;
-      ++itr;
-    }
-  }
-
   work.inactive() = sorted;
 }
 
-/// Clear the accumulators in the inactive work list and
-/// simultaneously sum the pathlengths using a parallel
-/// reduction. Doing these in combination is significantly
-/// faster than separating them.
+/// Clear the accumulators in the inactive work list:
 std::size_t LoadBalancer::clearInactiveAccumulators() {
   auto& list = work.inactive();
 
-  std::size_t sum = 0;
-#pragma omp parallel for reduction(+ \
-                                   : sum) schedule(auto)
+  #pragma omp parallel for schedule(auto)
   for (std::size_t i = 0; i < list.size(); ++i) {
     auto& t = list[i];
-    sum += t.pathLength;
-    t.r = t.g = t.b = 0.f;
-    t.pathLength = 0;
-    t.sampleCount = 0;
+    t.r = t.g = t.b = half(0.f);
   }
 
-  return sum;
+  return 0;
 }
 
-/// Clear the accumulators in the inactive work list:
+/// Clear the accumulators in the active work list:
 void LoadBalancer::clearActiveAccumulators() {
   auto& list = work.active();
 #pragma omp parallel for schedule(auto)
   for (std::size_t i = 0; i < list.size(); ++i) {
     auto& t = list[i];
-    t.r = t.g = t.b = 0.f;
-    t.pathLength = 0;
-    t.sampleCount = 0;
+    t.r = t.g = t.b = half(0.f);
   }
 }
