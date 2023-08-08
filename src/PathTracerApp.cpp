@@ -630,6 +630,7 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
     state.gamma = configGamma;
     state.fov = fieldOfView;
     state.envRotationDegrees = degrees;
+    state.interactiveSamples = args.at("interactive-samples").as<std::uint32_t>();
   }
 
   pvti::TraceChannel hostTraceChannel = {"host_processing"};
@@ -663,7 +664,7 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
       } else if (status == InterfaceServer::Status::Restart) {
         startTime = loopStartTime;
         step = 1;
-        samplesPerIpuStep = args.at("interactive-samples").as<std::uint32_t>();
+        samplesPerIpuStep = state.interactiveSamples;
       }
     } else {
       if (step == sampleCountReversionStep) {
