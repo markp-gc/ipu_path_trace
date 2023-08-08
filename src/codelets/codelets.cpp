@@ -147,6 +147,11 @@ public:
     // Note: number of trace records == contributionData.size()
     TraceRecord* traces = reinterpret_cast<TraceRecord*>(&traceBuffer[0]);
 
+    const float exposure = 0.f;
+    const float gamma = 2.2f;
+    const float exposureScale = __builtin_powf(2.f, exposure);
+    const float invGamma = 1.f / gamma;
+
     for (auto r = 0u; r < numRays; ++r, ++traces) {
       auto contributions = makeArrayWrapper<const light::Contribution>(contributionData[r]);
       const bool pathContributes = resizeContributionArray(contributions);
@@ -189,6 +194,14 @@ public:
             break;
           }
         }
+
+        // Apply tone-mapping:
+        total.x *= exposureScale;
+        total.y *= exposureScale;
+        total.z *= exposureScale;
+        total.x = __builtin_powf(total.x, invGamma);
+        total.y = __builtin_powf(total.y, invGamma);
+        total.z = __builtin_powf(total.z, invGamma);
 
         // Store the resulting colour contribution:
         traces->r = total.x;

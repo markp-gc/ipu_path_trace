@@ -21,27 +21,8 @@ AccumulatedImage::AccumulatedImage(std::size_t w, std::size_t h)
 AccumulatedImage::~AccumulatedImage() {}
 
 const cv::Mat& AccumulatedImage::updateLdrImage(std::size_t step, float exposure, float gamma) {
-  cv::Mat& scaledImage = hdrImage;
-
-  // Allocate low dynamic range image of same dimensions:
-  cv::Mat ldrImage(scaledImage.rows, scaledImage.cols, CV_32FC3);
-  image.create(scaledImage.rows, scaledImage.cols, CV_8UC3);
-
-  // Simple tone-map for the HDR image:
-  const float exposureScale = std::pow(2.f, exposure);
-  const float invGamma = 1.f / gamma;
-
-  #pragma omp parallel for schedule(auto)
-  for (auto r = 0; r < scaledImage.rows; ++r) {
-    auto inPtr = scaledImage.ptr<float>(r);
-    auto outPtr = ldrImage.ptr<float>(r);
-    for (auto i = 0; i < 3 * scaledImage.cols; ++i, ++inPtr, ++outPtr) {
-      // Apply exposure setting and gamma correction:
-      *outPtr = std::pow(*inPtr * exposureScale, invGamma);
-    }
-  }
-
-  ldrImage.convertTo(image, CV_8UC3, 255.0);
+  // IPU does tone mapping now so this is just a format conversion:
+  hdrImage.convertTo(image, CV_8UC3, 255.0);
   return image;
 }
 
