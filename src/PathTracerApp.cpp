@@ -557,7 +557,6 @@ PathTracerApp::processUserInput(
     }
 
     pvti::Tracepoint scopedTrace3(&traceChannel, "reset_host_render_state");
-    defunctState(imageWidth, imageHeight, engine);
 
     return InterfaceServer::Status::Restart;
   }
@@ -740,10 +739,6 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
         pvti::Tracepoint scopedTrace(&hostTraceChannel, "run_load_balancing");
         workPtr->allocateWorkByPathLength(ipuJobs);
       }
-
-      pvti::Tracepoint::begin(&hostTraceChannel, "clear_accumulators");
-      totalRays = workPtr->clearInactiveAccumulators();
-      pvti::Tracepoint::end(&hostTraceChannel, "clear_accumulators");
 
       // If there is a UI server we do not save
       // images as we go (only on the final step):

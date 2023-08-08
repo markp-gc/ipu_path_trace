@@ -57,7 +57,7 @@ void AccumulatedImage::saveImages(const std::string& fileName, std::size_t step,
 
 /// Accumulate the trace results converting from RGB to BGR in the process:
 void AccumulatedImage::accumulate(const std::vector<TraceRecord>& traces) {
-  #pragma omp parallel for schedule(auto)
+  #pragma omp parallel for schedule(static, 256) num_threads(16)
   for (std::size_t i = 0; i < traces.size(); ++i) {
     auto& t = traces[i];
     auto c = t.u;

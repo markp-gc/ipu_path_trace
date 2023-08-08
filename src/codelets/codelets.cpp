@@ -191,9 +191,9 @@ public:
         }
 
         // Store the resulting colour contribution:
-        traces->r += total.x;
-        traces->g += total.y;
-        traces->b += total.z;
+        traces->r = total.x;
+        traces->g = total.y;
+        traces->b = total.z;
       }
 
     } // end loop over camera rays
