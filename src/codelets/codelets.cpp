@@ -138,6 +138,8 @@ class AccumulateContributions : public Vertex {
 public:
   Vector<Input<Vector<unsigned char>>> contributionData;
   InOut<Vector<unsigned char>> traceBuffer;
+  Input<float> exposure;
+  Input<float> gamma;
 
   bool compute() {
     const Vec zero(0.f, 0.f, 0.f);
@@ -147,8 +149,6 @@ public:
     // Note: number of trace records == contributionData.size()
     TraceRecord* traces = reinterpret_cast<TraceRecord*>(&traceBuffer[0]);
 
-    const float exposure = 0.f;
-    const float gamma = 2.2f;
     const float exposureScale = __builtin_powf(2.f, exposure);
     const float invGamma = 1.f / gamma;
 

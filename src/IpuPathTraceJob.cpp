@@ -105,6 +105,14 @@ void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
   graph.connect(rayGenVertex["antiAliasScale"], localAaScale);
   graph.connect(rayGenVertex["fov"], localFov);
 
+  // Local copies for exposure settings also:
+  poplar::Tensor exposureTensor = inputs.at("exposure");
+  poplar::Tensor gammaTensor = inputs.at("gamma");
+  auto localExposure = graph.addVariable(exposureTensor.elementType(), exposureTensor.shape(), prefix + "exposure");
+  auto localGamma = graph.addVariable(gammaTensor.elementType(), gammaTensor.shape(), prefix + "gamma");
+  graph.setTileMapping(localExposure, ipuCore);
+  graph.setTileMapping(localGamma, ipuCore);
+
   // Make a local copy of azimuthal rotation:
   poplar::Tensor rotation = inputs.at("env-map-rotation");
   auto localRotation =
@@ -137,6 +145,8 @@ void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
     addScalarConstant(graph, v1, "stopProb", poplar::HALF,
                       args.at("stop-prob").as<float>());
     graph.connect(v1["cameraRays"], cameraRays.slice(interval.first * numRayDirComponents, interval.second * numRayDirComponents));
+    graph.connect(v2["exposure"], localExposure);
+    graph.connect(v2["gamma"], localGamma);
 
     auto contributionWorkerSlice = contributionData.slice(interval.first, interval.second);
     graph.connect(v1["contributionData"], contributionWorkerSlice);
@@ -176,6 +186,8 @@ void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
   beginSeq.add(poplar::program::Copy(aaScaleTensor, localAaScale));
   beginSeq.add(poplar::program::Copy(fovTensor, localFov));
   beginSeq.add(poplar::program::Copy(rotation, localRotation));
+  beginSeq.add(poplar::program::Copy(exposureTensor, localExposure));
+  beginSeq.add(poplar::program::Copy(gammaTensor, localGamma));
 
   // Program to generate the anti-aliasing samples:
   auto aaNoiseType = args.at("aa-noise-type").as<std::string>();

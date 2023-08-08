@@ -113,6 +113,8 @@ private:
   ipu_utils::StreamableTensor pathTraceCycleCount;
   ipu_utils::StreamableTensor iterationCycles;
   ipu_utils::StreamableTensor traceBuffer;
+  ipu_utils::StreamableTensor exposureTensor;
+  ipu_utils::StreamableTensor gammaTensor;
 
   poplin::matmul::PlanningCache cache;
   std::vector<std::unique_ptr<NifModel>> models;

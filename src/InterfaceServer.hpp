@@ -134,12 +134,14 @@ class InterfaceServer {
                                       [&](const ComPacket::ConstSharedPacket& packet) {
                                         deserialise(packet, state.exposure);
                                         ipu_utils::logger()->trace("Exposure new value: {}", state.exposure);
+                                        stateUpdated = true;
                                       });
 
       auto subs5 = receiver.subscribe("gamma",
                                       [&](const ComPacket::ConstSharedPacket& packet) {
                                         deserialise(packet, state.gamma);
                                         ipu_utils::logger()->trace("Gamma new value: {}", state.gamma);
+                                        stateUpdated = true;
                                       });
 
       auto subs6 = receiver.subscribe("fov",

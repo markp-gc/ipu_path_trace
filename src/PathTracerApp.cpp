@@ -54,8 +54,10 @@ PathTracerApp::PathTracerApp()
       nifCycleCount("nif_cycle_count"),
       pathTraceCycleCount("path_trace_cycle_count"),
       iterationCycles("iter_cycle_count"),
-      traceBuffer("trace_buffer") {}
-
+      traceBuffer("trace_buffer"),
+      exposureTensor("ipu_exposure"),
+      gammaTensor("ipu_gamma")
+{}
 
 void PathTracerApp::init(const boost::program_options::variables_map& options) {
   args = options;
@@ -350,6 +352,14 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
   g.setTileMapping(azimuthRotation, 0);
   initRenderSettings.add(azimuthRotation.buildWrite(g, optimiseCopyMemoryUse));
 
+  // Allow runtime update of tonemapping parameters:
+  exposureTensor.buildTensor(g, poplar::FLOAT, {});
+  g.setTileMapping(exposureTensor, 0);
+  initRenderSettings.add(exposureTensor.buildWrite(g, optimiseCopyMemoryUse));
+  gammaTensor.buildTensor(g, poplar::FLOAT, {});
+  g.setTileMapping(gammaTensor, 0);
+  initRenderSettings.add(gammaTensor.buildWrite(g, optimiseCopyMemoryUse));
+
   deviceSampleLimit.buildTensor(g, poplar::UNSIGNED_INT, {});
   g.setTileMapping(deviceSampleLimit, 0);
   initRenderSettings.add(deviceSampleLimit.buildWrite(g, optimiseCopyMemoryUse));
@@ -415,7 +425,9 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
         {"primary-samples", samplesFlatSlice},
         {"path-records", pathRecordsSlice},
         {"tracebuffer", traceBufferSlice},
-        {"primary-rays", primaryRaysSlice}};
+        {"primary-rays", primaryRaysSlice},
+        {"exposure", exposureTensor},
+        {"gamma", gammaTensor}};
     auto& job = ipuJobs[j];
     job.buildGraph(g, jobInputs, computeSets, args);
   }
@@ -608,13 +620,6 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
   const auto& progs = getPrograms();
   auto startTime = std::chrono::steady_clock::now();
 
-  connectNifStreams(engine);
-  progs.run(engine, "init_nif_weights");
-  progs.run(engine, "init_render_settings");
-
-  // Build the tracing jobs:
-  initialiseState(imageWidth, imageHeight, engine, device.getTarget());
-
   // Setup remote user interface:
   std::unique_ptr<InterfaceServer> uiServer;
   InterfaceServer::State state;
@@ -623,6 +628,8 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
     uiServer.reset(new InterfaceServer(uiPort));
     uiServer->start();
     uiServer->initialiseVideoStream(imageWidth, imageHeight);
+    exposureTensor.connectWriteStream(engine, (void*)&uiServer->getState().exposure);
+    gammaTensor.connectWriteStream(engine, (void*)&uiServer->getState().gamma);
   } else {
     // If no remote UI attach set the UI state direct from the options/config:
     state.exposure = configExposure;
@@ -630,7 +637,16 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
     state.fov = fieldOfView;
     state.envRotationDegrees = degrees;
     state.interactiveSamples = args.at("interactive-samples").as<std::uint32_t>();
+    exposureTensor.connectWriteStream(engine, &state.exposure);
+    gammaTensor.connectWriteStream(engine, &state.gamma);
   }
+
+  connectNifStreams(engine);
+  progs.run(engine, "init_nif_weights");
+  progs.run(engine, "init_render_settings");
+
+  // Build the tracing jobs:
+  initialiseState(imageWidth, imageHeight, engine, device.getTarget());
 
   pvti::TraceChannel hostTraceChannel = {"host_processing"};
   AsyncTask hostProcessing;
