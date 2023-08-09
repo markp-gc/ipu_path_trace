@@ -803,7 +803,7 @@ void PathTracerApp::addToolOptions(boost::program_options::options_description& 
   namespace po = boost::program_options;
   desc.add_options()
   ("outfile,o", po::value<std::string>()->required(), "Set output file name.")
-  ("save-interval", po::value<std::uint32_t>()->default_value(1))
+  ("save-interval", po::value<std::uint32_t>()->default_value(4000))
   ("width,w", po::value<std::uint32_t>()->default_value(256), "Output image width (total pixels).")
   ("height,h", po::value<std::uint32_t>()->default_value(256), "Output image height (total pixels).")
   ("samples,s", po::value<std::uint32_t>()->default_value(1000000), "Total samples to take per pixel.")
