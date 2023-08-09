@@ -17,6 +17,7 @@
 #ifdef __IPU__
 #include <ipu_vector_math>
 #include <ipu_memory_intrinsics>
+#include <ipu_builtins.h>
 
 #define GET_TILE_ID __builtin_ipu_get_tile_id()
 #else
@@ -191,10 +192,25 @@ public:
       total.y = __builtin_powf(total.y, invGamma);
       total.z = __builtin_powf(total.z, invGamma);
 
-      // Store the resulting colour contribution:
-      traces->r = total.x;
-      traces->g = total.y;
-      traces->b = total.z;
+
+      // Scale and clip result into an unsigned byte range:
+      total.x *= 255.f;
+      total.y *= 255.f;
+      total.z *= 255.f;
+
+#ifdef __IPU__
+      total.x = __builtin_ipu_min(total.x, 255.f);
+      total.y = __builtin_ipu_min(total.y, 255.f);
+      total.z = __builtin_ipu_min(total.z, 255.f);
+#else
+      total.x = std::min(total.x, 255.f);
+      total.y = std::min(total.y, 255.f);
+      total.z = std::min(total.z, 255.f);
+#endif
+
+      traces->r = std::uint8_t(total.x);
+      traces->g = std::uint8_t(total.y);
+      traces->b = std::uint8_t(total.z);
     } // end loop over camera rays
 
     return true;

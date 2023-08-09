@@ -155,7 +155,7 @@ std::size_t LoadBalancer::clearInactiveAccumulators() {
   #pragma omp parallel for schedule(auto)
   for (std::size_t i = 0; i < list.size(); ++i) {
     auto& t = list[i];
-    t.r = t.g = t.b = half(0.f);
+    t.r = t.g = t.b = 0;
   }
 
   return 0;
@@ -167,6 +167,6 @@ void LoadBalancer::clearActiveAccumulators() {
 #pragma omp parallel for schedule(auto)
   for (std::size_t i = 0; i < list.size(); ++i) {
     auto& t = list[i];
-    t.r = t.g = t.b = half(0.f);
+    t.r = t.g = t.b = 0;
   }
 }

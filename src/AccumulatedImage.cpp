@@ -14,26 +14,19 @@ void saveHdrImage(cv::Mat& hdrImage, const std::string& fileName) {
 }
 
 AccumulatedImage::AccumulatedImage(std::size_t w, std::size_t h)
-    : hdrImage(h, w, CV_32FC3) {
+    : hdrImage(h, w, CV_8UC3) {
   reset();
 }
 
 AccumulatedImage::~AccumulatedImage() {}
 
-const cv::Mat& AccumulatedImage::updateLdrImage(std::size_t step, float exposure, float gamma) {
-  // IPU does tone mapping now so this is just a format conversion:
-  hdrImage.convertTo(image, CV_8UC3, 255.0);
-  return image;
+const cv::Mat& AccumulatedImage::updateLdrImage() {
+  // IPU does tone mapping and format conversion now so just return the image:
+  return hdrImage;
 }
 
-void AccumulatedImage::saveImages(const std::string& fileName, std::size_t step, float exposure, float gamma) {
-  cv::imwrite(fileName, updateLdrImage(step, exposure, gamma));
-
-  // The image accumulated so far must be divided by the number
-  // of iterations in order that the final integrand is divided
-  // by the total sample count:
-  cv::Mat scaledImage = hdrImage * 1.f / step;
-  saveHdrImage(scaledImage, fileName);
+void AccumulatedImage::saveImages(const std::string& fileName) {
+  cv::imwrite(fileName, updateLdrImage());
 }
 
 /// Accumulate the trace results converting from RGB to BGR in the process:
@@ -46,11 +39,11 @@ void AccumulatedImage::accumulate(const std::vector<TraceRecord>& traces) {
     if (c >= hdrImage.cols || r >= hdrImage.rows) {
       // Skip as this entry is just worklist padding
     } else {
-      hdrImage.at<cv::Vec3f>(r, c) = cv::Vec3f((float)t.b, (float)t.g, (float)t.r);
+      hdrImage.at<cv::Vec3b>(r, c) = cv::Vec3b(t.b, t.g, t.r);
     }
   }
 }
 
 void AccumulatedImage::reset() {
-  hdrImage = cv::Vec3f(0.f, 0.f, 0.f);
+  hdrImage = cv::Vec3b(0, 0, 0);
 }

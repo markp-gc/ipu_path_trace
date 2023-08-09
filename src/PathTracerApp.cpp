@@ -739,7 +739,7 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
         // Send data to update the remote UI:
         {
           pvti::Tracepoint::begin(&hostTraceChannel, "tone_map");
-          auto& ldr = filmPtr->updateLdrImage(step, uiServer->getState().exposure, uiServer->getState().gamma);
+          auto& ldr = filmPtr->updateLdrImage();
           pvti::Tracepoint::end(&hostTraceChannel, "tone_map");
           pvti::Tracepoint scopedTrace(&hostTraceChannel, "ui_encode_video");
           uiServer->sendPreviewImage(ldr);
@@ -762,7 +762,7 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
           uiServer->startSendingRawImage(filmPtr->getHdrImage(), step);
         } else {
           pvti::Tracepoint scopedTrace(&hostTraceChannel, "save_images");
-          filmPtr->saveImages(fileName, step, state.exposure, state.gamma);
+          filmPtr->saveImages(fileName);
           ipu_utils::logger()->info("Saved images at step {}", step);
         }
       }
