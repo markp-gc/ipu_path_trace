@@ -95,7 +95,7 @@ class RayTraceKernel : public Vertex {
 public:
   Input<Vector<half>> cameraRays;
   Input<Vector<half>> uniform_0_1;
-  Vector<Output<Vector<unsigned char>>, poplar::VectorLayout::ONE_PTR> contributionData;
+  Vector<Output<Vector<float>>, poplar::VectorLayout::ONE_PTR> contributionData;
   Input<half> refractiveIndex;
   Input<half> stopProb;
   Input<unsigned short> rouletteDepth;
@@ -111,16 +111,9 @@ public:
       // sequence of x, y coords with implicit z-direction of -1:
       Vec rayDir((float)cameraRays[r], (float)cameraRays[r+1], (float)-1.f);
       light::Ray ray(zero, rayDir);
-      const std::uint32_t depth = 1;
-
-      // Store the contributions per ray by wrapping the raw vertex data with a stack data structure:
-      const std::size_t maxContributions = contributionData[c].size() / sizeof(light::Contribution);
-      light::Contribution* contributionDataPtr = reinterpret_cast<light::Contribution*>(&contributionData[c][0]);
-      WrappedArray<light::Contribution> contributions(maxContributions, contributionDataPtr);
-
-      // Trace rays through the scene, recording contribution values and type.
-      const bool hitEmitter = true;
-      contributions.push_back({ray.direction, 1.f, light::Contribution::Type::ESCAPED});
+      contributionData[c][0] = ray.direction.x;
+      contributionData[c][1] = ray.direction.y;
+      contributionData[c][2] = ray.direction.z;
     } // end loop over camera rays
 
     return true;
@@ -136,15 +129,12 @@ public:
 class AccumulateContributions : public Vertex {
 
 public:
-  Vector<Input<Vector<unsigned char>>> contributionData;
+  Vector<Output<Vector<float>>> contributionData;
   InOut<Vector<unsigned char>> traceBuffer;
   Input<float> exposure;
   Input<float> gamma;
 
   bool compute() {
-    const Vec zero(0.f, 0.f, 0.f);
-    const auto numRays = contributionData.size();
-
     // Get the descriptions of rays to be traced.
     // Note: number of trace records == contributionData.size()
     TraceRecord* traces = reinterpret_cast<TraceRecord*>(&traceBuffer[0]);
@@ -152,63 +142,21 @@ public:
     const float exposureScale = __builtin_powf(2.f, exposure);
     const float invGamma = 1.f / gamma;
 
-    for (auto r = 0u; r < numRays; ++r, ++traces) {
-      auto contributions = makeArrayWrapper<const light::Contribution>(contributionData[r]);
-      const bool pathContributes = resizeContributionArray(contributions);
+    for (auto r = 0u; r < contributionData.size(); ++r, ++traces) {
+      Vec total(contributionData[r][0], contributionData[r][1], contributionData[r][2]);
 
-      if (pathContributes) {
-        bool debug = false;
-        Vec total = zero;
-        while (!contributions.empty() && !debug) {
-          auto c = contributions.back();
-          contributions.pop_back();
-          switch (c.type) {
-          case light::Contribution::Type::DIFFUSE:
-            // Diffuse materials modulate the colour being carried back
-            // along the light path (scaled by the importance weight):
-            total = total.cwiseProduct(c.clr) * c.weight;
-            break;
-            // Emitters add their colour to the colour being carried back
-            // along the light path (scaled by the importance weight):
-          case light::Contribution::Type::EMIT:
-          case light::Contribution::Type::ESCAPED:
-            total += c.clr * c.weight;
-            break;
-          // For refracted materials modulate by colour to simulate
-          // refaction losses and then apply the importance weight:
-          case light::Contribution::Type::REFRACT:
-            total = total.cwiseProduct(c.clr) * c.weight;
-            break;
-          // Pure specular reflections have no colour contribution but
-          // their importance sampling weights must still be applied:
-          case light::Contribution::Type::SPECULAR:
-            total *= c.weight;
-            break;
-          case light::Contribution::Type::DEBUG:
-            debug = true;
-            total = c.clr;
-            break;
-          case light::Contribution::Type::END:
-          case light::Contribution::Type::SKIP:
-          default:
-            break;
-          }
-        }
+      // Apply tone-mapping:
+      total.x *= exposureScale;
+      total.y *= exposureScale;
+      total.z *= exposureScale;
+      total.x = __builtin_powf(total.x, invGamma);
+      total.y = __builtin_powf(total.y, invGamma);
+      total.z = __builtin_powf(total.z, invGamma);
 
-        // Apply tone-mapping:
-        total.x *= exposureScale;
-        total.y *= exposureScale;
-        total.z *= exposureScale;
-        total.x = __builtin_powf(total.x, invGamma);
-        total.y = __builtin_powf(total.y, invGamma);
-        total.z = __builtin_powf(total.z, invGamma);
-
-        // Store the resulting colour contribution:
-        traces->r = total.x;
-        traces->g = total.y;
-        traces->b = total.z;
-      }
-
+      // Store the resulting colour contribution:
+      traces->r = total.x;
+      traces->g = total.y;
+      traces->b = total.z;
     } // end loop over camera rays
 
     return true;
@@ -222,7 +170,7 @@ public:
 // projection.
 class PreProcessEscapedRays : public MultiVertex {
 public:
-  Vector<InOut<Vector<unsigned char>>> contributionData;
+  Vector<InOut<Vector<float>>> contributionData;
   Input<float> azimuthalOffset;
   Output<Vector<float>> u;
   Output<Vector<float>> v;
@@ -232,46 +180,34 @@ public:
 
     // Parallelise over all workers (each worker starts at a different offset):
     for (auto r = workerId; r < contributionData.size(); r += workerCount) {
-      auto contributions = makeArrayWrapper<light::Contribution>(contributionData[r]);
-      const bool pathContributes = resizeContributionArray(contributions);
-      auto& c = contributions.back();
-
-      if (c.type == light::Contribution::Type::ESCAPED) {
-        // Pre for environment lighting calculation.
-        auto rayDir = c.clr;
-        // Convert ray direction to UV coords using equirectangular projection.
-        // Calc assumes ray-dir was already normalised (note: normalised in Ray constructor).
-        auto theta = acosf(rayDir.y);
-        auto phi = atan2(rayDir.z, rayDir.x) + azimuthalOffset;
-        constexpr auto twoPi = 2.f * light::Pi;
-        constexpr auto invPi = 1.f / light::Pi;
-        constexpr auto inv2Pi = 1.f / twoPi;
-        if (phi < 0.f) {
-          phi += twoPi;
-        } else if (phi > twoPi) {
-          phi -= twoPi;
-        }
-        auto uCoord = theta * invPi;
-        auto vCoord = phi * inv2Pi;
-        c.clr = Vec(uCoord, vCoord, 0.f); // causes uv values to be rendered for debugging
-        u[r] = uCoord;
-        v[r] = vCoord;
-      } else {
-        // Avoid fp exceptions as these could otherwise remain uninitialised:
-        u[r] = 0.f;
-        v[r] = 0.f;
+      // Pre for environment lighting calculation.
+      Vec rayDir(contributionData[r][0], contributionData[r][1], contributionData[r][2]);
+      // Convert ray direction to UV coords using equirectangular projection.
+      // Calc assumes ray-dir was already normalised (note: normalised in Ray constructor).
+      auto theta = acosf(rayDir.y);
+      auto phi = atan2(rayDir.z, rayDir.x) + azimuthalOffset;
+      constexpr auto twoPi = 2.f * light::Pi;
+      constexpr auto invPi = 1.f / light::Pi;
+      constexpr auto inv2Pi = 1.f / twoPi;
+      if (phi < 0.f) {
+        phi += twoPi;
+      } else if (phi > twoPi) {
+        phi -= twoPi;
       }
+      auto uCoord = theta * invPi;
+      auto vCoord = phi * inv2Pi;
+      u[r] = uCoord;
+      v[r] = vCoord;
     }
 
     return true;
   }
-
 };
 
 // Update escaped rays with the result of env-map lighting lookup:
 class PostProcessEscapedRays : public MultiVertex {
 public:
-  Vector<InOut<Vector<unsigned char>>> contributionData;
+  Vector<InOut<Vector<float>>> contributionData;
   Vector<Input<Vector<float>>> bgr;
 
   bool compute(unsigned workerId) {
@@ -279,15 +215,11 @@ public:
 
     // Parallelise over all workers (each worker starts at a different offset):
     for (auto r = workerId; r < contributionData.size(); r += workerCount) {
-      auto contributions = makeArrayWrapper<light::Contribution>(contributionData[r]);
-      const bool pathContributes = resizeContributionArray(contributions);
-      auto& c = contributions.back();
-
-      if (c.type == light::Contribution::Type::ESCAPED) {
-        // Set the colour of the escaped ray:
-        auto v = bgr[r];
-        c.clr = Vec(v[2], v[1], v[0]);
-      }
+      // Set the colour of the escaped ray:
+      auto v = bgr[r];
+      contributionData[r][0] = v[2];
+      contributionData[r][1] = v[1];
+      contributionData[r][2] = v[0];
     }
 
     return true;

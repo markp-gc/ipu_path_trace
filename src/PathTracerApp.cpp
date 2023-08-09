@@ -302,11 +302,8 @@ PathTracerApp::buildPrimarySamples(poplar::Graph& g, const std::string& prefix) 
 
 poplar::Tensor PathTracerApp::buildPathRecords(poplar::Graph& g, const std::string& prefix) {
   // Make tensors to hold all per-ray paths data and other info:
-  constexpr auto contributionStructSize = sizeof(light::Contribution);
-  const auto maxPathLength = args.at("max-path-length").as<std::uint32_t>();
-  const auto maxBytesPerRay = maxPathLength * contributionStructSize;
   const auto numRays = ipuJobs.front().getPixelCount();
-  return g.addVariable(poplar::UNSIGNED_CHAR, {ipuJobs.size(), numRays, maxBytesPerRay}, prefix + "contributions");
+  return g.addVariable(poplar::FLOAT, {ipuJobs.size(), numRays, 3}, prefix + "contributions");
 }
 
 void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
