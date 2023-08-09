@@ -125,18 +125,12 @@ void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
   const auto workers = graph.getTarget().getNumWorkerContexts();
   auto pathTraceCs = cs.at("path-trace");
   auto preProcEscapedRaysCs = cs.at("pre-process-escaped-rays");
-  auto accumulateCs = cs.at("accumulate-lighting");
   tracerVertices.reserve(workers);
-  accumulatorVertices.reserve(workers);
-
-  auto traceRecordSize = sizeof(TraceRecord);
 
   const auto intervals = splitTilePixelsOverWorkers(getPixelCount(), workers);
   for (const auto& interval : intervals) {
     tracerVertices.push_back(graph.addVertex(pathTraceCs, "RayTraceKernel"));
-    accumulatorVertices.push_back(graph.addVertex(accumulateCs, "AccumulateContributions"));
     auto& v1 = tracerVertices.back();
-    auto& v2 = accumulatorVertices.back();
 
     addScalarConstant(graph, v1, "refractiveIndex", poplar::HALF,
                       args.at("refractive-index").as<float>());
@@ -145,17 +139,9 @@ void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
     addScalarConstant(graph, v1, "stopProb", poplar::HALF,
                       args.at("stop-prob").as<float>());
     graph.connect(v1["cameraRays"], cameraRays.slice(interval.first * numRayDirComponents, interval.second * numRayDirComponents));
-    graph.connect(v2["exposure"], localExposure);
-    graph.connect(v2["gamma"], localGamma);
 
     auto contributionWorkerSlice = contributionData.slice(interval.first, interval.second);
     graph.connect(v1["contributionData"], contributionWorkerSlice);
-    graph.connect(v2["contributionData"], contributionWorkerSlice);
-
-    auto traceSlice = traceBuffer.slice(interval.first * traceRecordSize, interval.second * traceRecordSize);
-    // Trace slice = {tile-width x tile-height/6 * sizeof(TraceRecord)}
-    // Contribution slice = {tile-width x tile-height/6, maxContributions * sizeof(Contribution)}
-    graph.connect(v2["traceBuffer"], traceSlice);
   }
 
   poplar::Tensor uvInput = inputs.at("uv-input");
@@ -172,8 +158,11 @@ void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
   poplar::Tensor envMapResult = inputs.at("env-map-result");
   auto applyEnvLightingCs = cs.at("apply-env-lighting");
   auto v4 = graph.addVertex(applyEnvLightingCs, "PostProcessEscapedRays");
-  graph.connect(v4["contributionData"], contributionData);
   graph.connect(v4["bgr"], envMapResult.squeeze({0}));
+  graph.connect(v4["traceBuffer"], traceBuffer);
+  graph.connect(v4["exposure"], localExposure);
+  graph.connect(v4["gamma"], localGamma);
+  graph.setInitialValue(v4["id"], ipuCore);
   graph.setTileMapping(v4, ipuCore);
   graph.setTileMapping(envMapResult, ipuCore);
   graph.setPerfEstimate(v4, 1);
@@ -216,10 +205,6 @@ void IpuPathTraceJob::setTileMappings(poplar::Graph& graph) {
   graph.setTileMapping(rayGenVertex, ipuCore);
   graph.setTileMapping(contributionData, ipuCore);
   for (auto& v : tracerVertices) {
-    graph.setTileMapping(v, ipuCore);
-    graph.setPerfEstimate(v, 1);  // Fake perf estimate (for IpuModel only).
-  }
-  for (auto& v : accumulatorVertices) {
     graph.setTileMapping(v, ipuCore);
     graph.setPerfEstimate(v, 1);  // Fake perf estimate (for IpuModel only).
   }

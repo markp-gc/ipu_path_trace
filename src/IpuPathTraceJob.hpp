@@ -71,7 +71,6 @@ private:
 
   poplar::VertexRef rayGenVertex;
   std::vector<poplar::VertexRef> tracerVertices;
-  std::vector<poplar::VertexRef> accumulatorVertices;
 
   poplar::program::Sequence beginSeq;
   poplar::program::Sequence endSeq;

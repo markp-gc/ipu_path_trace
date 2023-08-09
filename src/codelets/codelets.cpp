@@ -9,6 +9,8 @@
 #include "WrappedArray.hpp"
 #include "TraceRecord.hpp"
 
+#include <print.h>
+
 // Because intrinsic/vectorised code can not be used with CPU
 // or IpuModel targets we need to guard IPU optimised parts of
 // the code so we can still support those:
@@ -120,50 +122,6 @@ public:
   }
 };
 
-/// This codelet accumulates the lighting contributions backwards along
-/// the ray paths recorded by the ray trace kernel.
-///
-/// The codelet is templated on the framebuffer type. If using half
-/// precision it is the application's responsibility to avoid framebuffer
-/// saturation: this avoids extra logic and computation in the codelet.
-class AccumulateContributions : public Vertex {
-
-public:
-  Vector<Output<Vector<float>>> contributionData;
-  InOut<Vector<unsigned char>> traceBuffer;
-  Input<float> exposure;
-  Input<float> gamma;
-
-  bool compute() {
-    // Get the descriptions of rays to be traced.
-    // Note: number of trace records == contributionData.size()
-    TraceRecord* traces = reinterpret_cast<TraceRecord*>(&traceBuffer[0]);
-
-    const float exposureScale = __builtin_powf(2.f, exposure);
-    const float invGamma = 1.f / gamma;
-
-    for (auto r = 0u; r < contributionData.size(); ++r, ++traces) {
-      Vec total(contributionData[r][0], contributionData[r][1], contributionData[r][2]);
-
-      // Apply tone-mapping:
-      total.x *= exposureScale;
-      total.y *= exposureScale;
-      total.z *= exposureScale;
-      total.x = __builtin_powf(total.x, invGamma);
-      total.y = __builtin_powf(total.y, invGamma);
-      total.z = __builtin_powf(total.z, invGamma);
-
-      // Store the resulting colour contribution:
-      traces->r = total.x;
-      traces->g = total.y;
-      traces->b = total.z;
-    } // end loop over camera rays
-
-    return true;
-  }
-
-};
-
 // This takes path trace results and calculates UV coords for all
 // the escaped rays in order to lookup lighting values from the
 // environment map. UVs are calculated using equirectangular
@@ -207,20 +165,37 @@ public:
 // Update escaped rays with the result of env-map lighting lookup:
 class PostProcessEscapedRays : public MultiVertex {
 public:
-  Vector<InOut<Vector<float>>> contributionData;
   Vector<Input<Vector<float>>> bgr;
+  InOut<Vector<unsigned char>> traceBuffer;
+  Input<float> exposure;
+  Input<float> gamma;
+  unsigned id;
 
   bool compute(unsigned workerId) {
     const auto workerCount = numWorkers();
 
-    // Parallelise over all workers (each worker starts at a different offset):
-    for (auto r = workerId; r < contributionData.size(); r += workerCount) {
-      // Set the colour of the escaped ray:
+    // Note: number of trace records == contributionData.size()
+    const float exposureScale = __builtin_powf(2.f, exposure);
+    const float invGamma = 1.f / gamma;
+
+    TraceRecord* traces = reinterpret_cast<TraceRecord*>(&traceBuffer[0]) + workerId;
+    for (auto r = workerId; r < bgr.size(); r += workerCount, traces += workerCount) {
       auto v = bgr[r];
-      contributionData[r][0] = v[2];
-      contributionData[r][1] = v[1];
-      contributionData[r][2] = v[0];
-    }
+      Vec total(v[2], v[1], v[0]);
+
+      // Apply tone-mapping:
+      total.x *= exposureScale;
+      total.y *= exposureScale;
+      total.z *= exposureScale;
+      total.x = __builtin_powf(total.x, invGamma);
+      total.y = __builtin_powf(total.y, invGamma);
+      total.z = __builtin_powf(total.z, invGamma);
+
+      // Store the resulting colour contribution:
+      traces->r = total.x;
+      traces->g = total.y;
+      traces->b = total.z;
+    } // end loop over camera rays
 
     return true;
   }
