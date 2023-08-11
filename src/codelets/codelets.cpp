@@ -163,6 +163,41 @@ public:
   }
 };
 
+#ifdef __IPU__
+
+// Quickly compute x^y using log and exp.
+//
+// This is not a general purpose powf implementation
+// but will work for range of values typically used in
+// gamma correction. There is no special case handling.
+// Absolute errors can be very high outside of intended
+// use case.
+inline
+float ipu_powf(float x, float y) {
+  return __builtin_ipu_exp(y * __builtin_ipu_ln(x));
+}
+
+// Compute 2^y using dedicated HW instruction:
+inline
+float ipu_exp2(float y) {
+  return __builtin_ipu_exp2(y);
+}
+
+#else
+
+// Fallbacks for CPU targets:
+inline
+float ipu_powf(float x, float y) {
+  return __builtin_powf(x, y);
+}
+
+inline
+float ipu_exp2(float y) {
+  return ipu_powf(2.f, y);
+}
+
+#endif
+
 // Update escaped rays with the result of env-map lighting lookup:
 class PostProcessEscapedRays : public MultiVertex {
 public:
@@ -176,7 +211,7 @@ public:
     const auto workerCount = numWorkers();
 
     // Note: number of trace records == contributionData.size()
-    const float exposureScale = __builtin_powf(2.f, exposure);
+    const float exposureScale = ipu_exp2(exposure);
     const float invGamma = 1.f / gamma;
 
     TraceRecord* traces = reinterpret_cast<TraceRecord*>(&traceBuffer[0]) + workerId;
@@ -188,10 +223,9 @@ public:
       total.x *= exposureScale;
       total.y *= exposureScale;
       total.z *= exposureScale;
-      total.x = __builtin_powf(total.x, invGamma);
-      total.y = __builtin_powf(total.y, invGamma);
-      total.z = __builtin_powf(total.z, invGamma);
-
+      total.x = ipu_powf(total.x, invGamma);
+      total.y = ipu_powf(total.y, invGamma);
+      total.z = ipu_powf(total.z, invGamma);
 
       // Scale and clip result into an unsigned byte range:
       total.x *= 255.f;
@@ -202,10 +236,16 @@ public:
       total.x = __builtin_ipu_min(total.x, 255.f);
       total.y = __builtin_ipu_min(total.y, 255.f);
       total.z = __builtin_ipu_min(total.z, 255.f);
+      // total.x = __builtin_ipu_max(total.x, 0.f);
+      // total.y = __builtin_ipu_max(total.y, 0.f);
+      // total.z = __builtin_ipu_max(total.z, 0.f);
 #else
       total.x = std::min(total.x, 255.f);
       total.y = std::min(total.y, 255.f);
       total.z = std::min(total.z, 255.f);
+      // total.x = std::max(total.x, 0.f);
+      // total.y = std::max(total.y, 0.f);
+      // total.z = std::max(total.z, 0.f);
 #endif
 
       traces->r = std::uint8_t(total.x);
