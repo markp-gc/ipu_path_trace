@@ -29,7 +29,7 @@ void AccumulatedImage::saveImages(const std::string& fileName) {
   cv::imwrite(fileName, updateLdrImage());
 }
 
-/// Accumulate the trace results converting from RGB to BGR in the process:
+/// Accumulate the trace results:
 void AccumulatedImage::accumulate(const std::vector<TraceRecord>& traces) {
   #pragma omp parallel for schedule(static, 256) num_threads(16)
   for (std::size_t i = 0; i < traces.size(); ++i) {
@@ -39,7 +39,7 @@ void AccumulatedImage::accumulate(const std::vector<TraceRecord>& traces) {
     if (c >= hdrImage.cols || r >= hdrImage.rows) {
       // Skip as this entry is just worklist padding
     } else {
-      hdrImage.at<cv::Vec3b>(r, c) = cv::Vec3b(t.b, t.g, t.r);
+      hdrImage.at<cv::Vec3b>(r, c) = cv::Vec3b(t.r, t.g, t.b);
     }
   }
 }

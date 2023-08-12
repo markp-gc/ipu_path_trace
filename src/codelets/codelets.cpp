@@ -177,6 +177,11 @@ float ipu_powf(float x, float y) {
   return __builtin_ipu_exp(y * __builtin_ipu_ln(x));
 }
 
+inline
+half2 ipu_powh(half2 x, half y) {
+  return __builtin_ipu_exp(y * __builtin_ipu_ln(x));
+}
+
 // Compute 2^y using dedicated HW instruction:
 inline
 float ipu_exp2(float y) {
@@ -211,46 +216,56 @@ public:
     const auto workerCount = numWorkers();
 
     // Note: number of trace records == contributionData.size()
-    const float exposureScale = ipu_exp2(exposure);
-    const float invGamma = 1.f / gamma;
+    const half exposureScale = ipu_exp2(exposure);
+    const half invGamma = 1.f / gamma;
 
     TraceRecord* traces = reinterpret_cast<TraceRecord*>(&traceBuffer[0]) + workerId;
     for (auto r = workerId; r < bgr.size(); r += workerCount, traces += workerCount) {
-      auto v = bgr[r];
-      Vec total(v[2], v[1], v[0]);
-
-      // Apply tone-mapping:
-      total.x *= exposureScale;
-      total.y *= exposureScale;
-      total.z *= exposureScale;
-      total.x = ipu_powf(total.x, invGamma);
-      total.y = ipu_powf(total.y, invGamma);
-      total.z = ipu_powf(total.z, invGamma);
-
-      // Scale and clip result into an unsigned byte range:
-      total.x *= 255.f;
-      total.y *= 255.f;
-      total.z *= 255.f;
+      const auto v = bgr[r];
 
 #ifdef __IPU__
-      total.x = __builtin_ipu_min(total.x, 255.f);
-      total.y = __builtin_ipu_min(total.y, 255.f);
-      total.z = __builtin_ipu_min(total.z, 255.f);
-      // total.x = __builtin_ipu_max(total.x, 0.f);
-      // total.y = __builtin_ipu_max(total.y, 0.f);
-      // total.z = __builtin_ipu_max(total.z, 0.f);
+      // We don't care about the 4th component but repeating a
+      // component is more efficient than materialising a constant:
+      half4 total{(half)v[0], (half)v[1], (half)v[2], (half)v[2]};
+
+      // Apply tone-mapping:
+      total *= exposureScale;
+      half2 total_xy{total[0], total[1]};
+      half2 total_zw{total[2], total[3]};
+      total_xy = ipu_powh(total_xy, invGamma);
+      total_zw = ipu_powh(total_zw, invGamma);
+      total[0] = total_xy[0];
+      total[1] = total_xy[1];
+      total[2] = total_zw[0];
+      total[3] = total_zw[1]; // Value not needed but compiler makes a mess if we don't do this
+
+      // Scale and clip result into an unsigned byte range:
+      constexpr half scale = 255.f;
+      constexpr half2 validRange {0.f, scale};
+      total *= scale;
+      total = __builtin_ipu_clamp(total, validRange);
 #else
-      total.x = std::min(total.x, 255.f);
-      total.y = std::min(total.y, 255.f);
-      total.z = std::min(total.z, 255.f);
-      // total.x = std::max(total.x, 0.f);
-      // total.y = std::max(total.y, 0.f);
-      // total.z = std::max(total.z, 0.f);
+      float total[] = {v[2], v[1], v[0]};
+      total[0] *= exposureScale;
+      total[1] *= exposureScale;
+      total[2] *= exposureScale;
+      total[0] = ipu_powf(total[0], invGamma);
+      total[1] = ipu_powf(total[1], invGamma);
+      total[2] = ipu_powf(total[2], invGamma);
+      total[0] *= 255.f;
+      total[1] *= 255.f;
+      total[2] *= 255.f;
+      total[0] = std::min(total[0], 255.f);
+      total[1] = std::min(total[1], 255.f);
+      total[2] = std::min(total[2], 255.f);
+      total[0] = std::max(total[0], 0.f);
+      total[1] = std::max(total[1], 0.f);
+      total[2] = std::max(total[2], 0.f);
 #endif
 
-      traces->r = std::uint8_t(total.x);
-      traces->g = std::uint8_t(total.y);
-      traces->b = std::uint8_t(total.z);
+      traces->r = std::uint8_t(total[0]);
+      traces->g = std::uint8_t(total[1]);
+      traces->b = std::uint8_t(total[2]);
     } // end loop over camera rays
 
     return true;
