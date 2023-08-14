@@ -383,10 +383,6 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
   poplar::program::Sequence genAaNoise;
   std::tie(aaNoise, genAaNoise) = buildAntiAliasNoise(g, prefix);
 
-  poplar::Tensor primarySamples;
-  poplar::program::Sequence genPrimarySamples;
-  std::tie(primarySamples, genPrimarySamples) = buildPrimarySamples(g, prefix);
-
   auto pathRecords = buildPathRecords(g, prefix);
 
   const auto pathsPerTile = ipuJobs.front().getPixelCount();
@@ -408,7 +404,6 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
     auto uvInputSlice = uvInput.slice(j, j + 1, 1);
     auto nifResultSlice = envNifs.result.slice(j, j + 1, 0);
     auto aaNoiseFlatSlice = aaNoise.slice(j, j + 1, 0).flatten();
-    auto samplesFlatSlice = primarySamples.slice(j, j + 1, 0).flatten();
     auto pathRecordsSlice = pathRecords.slice(j, j + 1, 0).reshape({pathRecords.dim(1), pathRecords.dim(2)});
     auto traceBufferSlice = traceBuffer.get().slice(j, j + 1, 0).reshape({traceBuffer.get().dim(1)});
     auto primaryRaysSlice = primaryRays.slice(j, j + 1, 0).reshape({primaryRays.dim(1)});
@@ -419,7 +414,6 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
         {"env-map-result", nifResultSlice},
         {"env-map-rotation", azimuthRotation},
         {"aa-noise", aaNoiseFlatSlice},
-        {"primary-samples", samplesFlatSlice},
         {"path-records", pathRecordsSlice},
         {"tracebuffer", traceBufferSlice},
         {"primary-rays", primaryRaysSlice},
@@ -442,7 +436,6 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
   pathTraceIteration.add(genAaNoise);
   pathTraceIteration.add(Execute(computeSets.at("gen-rays")));
   pathTraceIteration.add(WriteUndef(aaNoise));
-  pathTraceIteration.add(genPrimarySamples);
 
   // Wrap path tracing in cycle counter:
   Sequence execPathTrace;
@@ -451,7 +444,6 @@ void PathTracerApp::build(poplar::Graph& g, const poplar::Target& target) {
       g, execPathTrace, 0, poplar::SyncType::EXTERNAL, "path_trace_cycle_count");
 
   pathTraceIteration.add(execPathTrace);
-  pathTraceIteration.add(WriteUndef(primarySamples));
   pathTraceIteration.add(Execute(computeSets.at("pre-process-escaped-rays")));
 
   // Do environment map lookups via neural network, count cycles for this also:

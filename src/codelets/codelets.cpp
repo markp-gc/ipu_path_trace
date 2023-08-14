@@ -97,15 +97,10 @@ class RayTraceKernel : public Vertex {
 
 public:
   Input<Vector<half>> cameraRays;
-  Input<Vector<half>> uniform_0_1;
   Vector<Output<Vector<float>>, poplar::VectorLayout::ONE_PTR> contributionData;
-  Input<half> refractiveIndex;
-  Input<half> stopProb;
-  Input<unsigned short> rouletteDepth;
 
   bool compute() {
     const Vec zero(0.f, 0.f, 0.f);
-    const Vec one(1.f, 1.f, 1.f);
 
     // Loop over the camera rays:
     const auto raysSize = (cameraRays.size() >> 1) << 1;
@@ -129,7 +124,7 @@ public:
 // projection.
 class PreProcessEscapedRays : public MultiVertex {
 public:
-  Vector<InOut<Vector<float>>> contributionData;
+  Vector<Input<Vector<float>>> contributionData;
   Input<float> azimuthalOffset;
   Output<Vector<float>> u;
   Output<Vector<float>> v;
@@ -215,7 +210,6 @@ public:
   bool compute(unsigned workerId) {
     const auto workerCount = numWorkers();
 
-    // Note: number of trace records == contributionData.size()
     const half exposureScale = ipu_exp2(exposure);
     const half invGamma = 1.f / gamma;
 

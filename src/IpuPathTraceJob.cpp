@@ -132,12 +132,6 @@ void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
     tracerVertices.push_back(graph.addVertex(pathTraceCs, "RayTraceKernel"));
     auto& v1 = tracerVertices.back();
 
-    addScalarConstant(graph, v1, "refractiveIndex", poplar::HALF,
-                      args.at("refractive-index").as<float>());
-    addScalarConstant(graph, v1, "rouletteDepth", poplar::UNSIGNED_SHORT,
-                      args.at("roulette-depth").as<std::uint16_t>());
-    addScalarConstant(graph, v1, "stopProb", poplar::HALF,
-                      args.at("stop-prob").as<float>());
     graph.connect(v1["cameraRays"], cameraRays.slice(interval.first * numRayDirComponents, interval.second * numRayDirComponents));
 
     auto contributionWorkerSlice = contributionData.slice(interval.first, interval.second);
@@ -181,23 +175,6 @@ void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
   // Program to generate the anti-aliasing samples:
   auto aaNoiseType = args.at("aa-noise-type").as<std::string>();
   graph.connect(rayGenVertex["antiAliasNoise"], inputs.at("aa-noise"));
-
-  // Create program to generate the path tracing (primary sample space) samples.
-  auto randUniform_0_1 = inputs.at("primary-samples");
-
-  // Need to slice the random numbers between vertices. This is simpler than
-  // splitting the pixels because we chose num elements to divide exactly:
-  if (randUniform_0_1.numElements() % workers != 0) {
-    throw std::logic_error("Size of random data must be divisible by number of workers.");
-  }
-  auto start = 0u;
-  const auto inc = randUniform_0_1.numElements() / workers;
-  auto end = inc;
-  for (auto i = 0u; i < workers; ++i) {
-    graph.connect(tracerVertices[i]["uniform_0_1"], randUniform_0_1.slice(start, end));
-    start = end;
-    end += inc;
-  }
 }
 
 /// Set the tile mapping for all variables and vertices:
