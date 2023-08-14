@@ -62,10 +62,10 @@ public:
     // Each worker will process one sixth of the rays so
     // we simply offset the start address based on worker ID:
     auto workerPtr = traces + workerId;
-    float fovf32 = (float)*fov;
-    float2 twoowh{2.f / imageWidth, 2.f / imageHeight};
-    float aspect = imageWidth / imageHeight;
-    float tanTheta = tanf(fovf32 / 2.f);
+    const float2 project{1.f / imageWidth, 1.f / imageHeight};
+    const float aspect = (float)imageWidth / (float)imageHeight;
+    const float tanTheta = tanf((float)fov / 2.f);
+    const float2 scale{2.f * aspect * tanTheta, -2.f * tanTheta};
 
     for (auto k = 2 * workerId; k < rayCount; k += 2 * workerCount) {
       // Add anti-alias noise in pixel space:
@@ -73,9 +73,9 @@ public:
       const float2 noise = __builtin_ipu_f32v2grand();
       cr += noise * (float)*antiAliasScale;
       // Pixel to camera ray transform:
-      cr *= twoowh;
-      cr -= 1.f;
-      cr *= float2{aspect * tanTheta, -tanTheta};
+      cr *= project;
+      cr -= 0.5f;
+      cr *= scale;
       rays[k]     = cr[0];
       rays[k + 1] = cr[1];
       workerPtr += workerCount;
