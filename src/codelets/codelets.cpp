@@ -9,6 +9,12 @@
 #include "WrappedArray.hpp"
 #include "TraceRecord.hpp"
 
+// Undefine the slower trig funcs and use custom versions:
+#undef tanf
+#undef atanf
+#undef atan2f
+#include "trig.hpp"
+
 #include <print.h>
 
 // Because intrinsic/vectorised code can not be used with CPU
@@ -135,7 +141,7 @@ public:
       // Convert ray direction to UV coords using equirectangular projection.
       // Calc assumes ray-dir was already normalised (note: normalised in Ray constructor).
       auto theta = acosf(rayDir.y);
-      auto phi = atan2(rayDir.z, rayDir.x) + azimuthalOffset;
+      auto phi = atan2f(rayDir.z, rayDir.x) + azimuthalOffset;
       constexpr auto twoPi = 2.f * light::Pi;
       constexpr auto invPi = 1.f / light::Pi;
       constexpr auto inv2Pi = 1.f / twoPi;
