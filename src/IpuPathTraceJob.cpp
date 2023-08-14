@@ -171,10 +171,6 @@ void IpuPathTraceJob::buildGraph(poplar::Graph& graph,
   beginSeq.add(poplar::program::Copy(rotation, localRotation));
   beginSeq.add(poplar::program::Copy(exposureTensor, localExposure));
   beginSeq.add(poplar::program::Copy(gammaTensor, localGamma));
-
-  // Program to generate the anti-aliasing samples:
-  auto aaNoiseType = args.at("aa-noise-type").as<std::string>();
-  graph.connect(rayGenVertex["antiAliasNoise"], inputs.at("aa-noise"));
 }
 
 /// Set the tile mapping for all variables and vertices:

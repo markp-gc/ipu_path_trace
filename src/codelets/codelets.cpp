@@ -39,7 +39,6 @@ using Vec = light::Vector;
 class GenerateCameraRays : public MultiVertex {
 
 public:
-  Input<Vector<half>> antiAliasNoise;
   Output<Vector<half>> rays;
   Input<Vector<unsigned char>> traceBuffer;
   Input<unsigned> imageWidth;
@@ -50,16 +49,6 @@ public:
   bool compute(unsigned workerId) {
     const auto workerCount = numWorkers();
 
-    // Make a lambda to consume random numbers from the buffer.
-    // Each worker consumes random numbers using its ID as an
-    // offset into the noise buffer:
-    std::size_t randomIndex = workerId;
-    auto rng = [&] () {
-      const half value = antiAliasNoise[randomIndex];
-      randomIndex += workerCount;
-      return value;
-    };
-
     // Get the descriptions of rays to be traced:
     auto rayCount = rays.size();
     const TraceRecord* traces = reinterpret_cast<const TraceRecord*>(&traceBuffer[0]);
@@ -67,15 +56,22 @@ public:
     // Each worker will process one sixth of the rays so
     // we simply offset the start address based on worker ID:
     auto workerPtr = traces + workerId;
-    // Outer loop is parallelised over the worker threads:
     float fovf32 = (float)*fov;
+    float2 twoowh{2.f / imageWidth, 2.f / imageHeight};
+    float aspect = imageWidth / imageHeight;
+    float tanTheta = tanf(fovf32 / 2.f);
+
     for (auto k = 2 * workerId; k < rayCount; k += 2 * workerCount) {
       // Add anti-alias noise in pixel space:
-      float c = workerPtr->u + (float)(*antiAliasScale * rng());
-      float r = workerPtr->v + (float)(*antiAliasScale * rng());
-      const Vec cam = light::pixelToRay(c, r, imageWidth, imageHeight, fovf32);
-      rays[k]     = cam.x;
-      rays[k + 1] = cam.y;
+      float2 cr{(float)workerPtr->u, (float)workerPtr->v};
+      const float2 noise = __builtin_ipu_f32v2grand();
+      cr += noise * (float)*antiAliasScale;
+      // Pixel to camera ray transform:
+      cr *= twoowh;
+      cr -= 1.f;
+      cr *= float2{aspect * tanTheta, -tanTheta};
+      rays[k]     = cr[0];
+      rays[k + 1] = cr[1];
       workerPtr += workerCount;
     }
     return true;
@@ -158,8 +154,6 @@ public:
   }
 };
 
-#ifdef __IPU__
-
 // Quickly compute x^y using log and exp.
 //
 // This is not a general purpose powf implementation
@@ -183,21 +177,6 @@ float ipu_exp2(float y) {
   return __builtin_ipu_exp2(y);
 }
 
-#else
-
-// Fallbacks for CPU targets:
-inline
-float ipu_powf(float x, float y) {
-  return __builtin_powf(x, y);
-}
-
-inline
-float ipu_exp2(float y) {
-  return ipu_powf(2.f, y);
-}
-
-#endif
-
 // Update escaped rays with the result of env-map lighting lookup:
 class PostProcessEscapedRays : public MultiVertex {
 public:
@@ -217,7 +196,6 @@ public:
     for (auto r = workerId; r < bgr.size(); r += workerCount, traces += workerCount) {
       const auto v = bgr[r];
 
-#ifdef __IPU__
       // We don't care about the 4th component but repeating a
       // component is more efficient than materialising a constant:
       half4 total{(half)v[0], (half)v[1], (half)v[2], (half)v[2]};
@@ -238,24 +216,6 @@ public:
       constexpr half2 validRange {0.f, scale};
       total *= scale;
       total = __builtin_ipu_clamp(total, validRange);
-#else
-      float total[] = {v[2], v[1], v[0]};
-      total[0] *= exposureScale;
-      total[1] *= exposureScale;
-      total[2] *= exposureScale;
-      total[0] = ipu_powf(total[0], invGamma);
-      total[1] = ipu_powf(total[1], invGamma);
-      total[2] = ipu_powf(total[2], invGamma);
-      total[0] *= 255.f;
-      total[1] *= 255.f;
-      total[2] *= 255.f;
-      total[0] = std::min(total[0], 255.f);
-      total[1] = std::min(total[1], 255.f);
-      total[2] = std::min(total[2], 255.f);
-      total[0] = std::max(total[0], 0.f);
-      total[1] = std::max(total[1], 0.f);
-      total[2] = std::max(total[2], 0.f);
-#endif
 
       traces->r = std::uint8_t(total[0]);
       traces->g = std::uint8_t(total[1]);
