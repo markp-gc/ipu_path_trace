@@ -14,7 +14,7 @@ void saveHdrImage(cv::Mat& hdrImage, const std::string& fileName) {
 }
 
 AccumulatedImage::AccumulatedImage(std::size_t w, std::size_t h)
-    : hdrImage(h, w, CV_8UC3) {
+    : image(h, w, CV_8UC3) {
   reset();
 }
 
@@ -22,7 +22,7 @@ AccumulatedImage::~AccumulatedImage() {}
 
 const cv::Mat& AccumulatedImage::updateLdrImage() {
   // IPU does tone mapping and format conversion now so just return the image:
-  return hdrImage;
+  return image;
 }
 
 void AccumulatedImage::saveImages(const std::string& fileName) {
@@ -36,14 +36,14 @@ void AccumulatedImage::accumulate(const std::vector<TraceRecord>& traces) {
     auto& t = traces[i];
     auto c = t.u;
     auto r = t.v;
-    if (c >= hdrImage.cols || r >= hdrImage.rows) {
+    if (c >= image.cols || r >= image.rows) {
       // Skip as this entry is just worklist padding
     } else {
-      hdrImage.at<cv::Vec3b>(r, c) = cv::Vec3b(t.r, t.g, t.b);
+      image.at<cv::Vec3b>(r, c) = cv::Vec3b(t.r, t.g, t.b);
     }
   }
 }
 
 void AccumulatedImage::reset() {
-  hdrImage = cv::Vec3b(0, 0, 0);
+  image = cv::Vec3b(0, 0, 0);
 }
