@@ -1,6 +1,6 @@
 # NIF-only branch!
 
-This branch is nothing to do with path tracing: it strips out everything except the neural image field rendering to build a remote real-time NIF rendering/inference demo. This probably belongs in its own repository but it was easier to rapidly prototype by branchign from a working program.
+This branch is nothing to do with path tracing: it strips out everything except the neural image field rendering to build a remote real-time NIF rendering/inference demo. This probably belongs in its own repository but it was easier to rapidly prototype by branching from a working program.
 
 The demo consists of two parts: a cloud based render server and a local remote viewer. The instructions below are a quick start guide to build and run this demo.
 
@@ -86,9 +86,9 @@ Once you are in the container find the ports panel and forward a port number of 
 
 ### Download/upload a NIF asset to your cloud machine
 
-Whilst you can train your own NIF for use in the demo we recommend you check it works with a pre-trained asset first. There is a trained neural image field included in the git repo. This model is quite large for this type of neural network: 8 layers and hidden size 320 and requires approximately 1M FLOPs per sample. The network architecture is the one from: [Towards Neural path Tracing in SRAM](https://arxiv.org/abs/2305.20061).
+Whilst you can train your own NIF for use in the demo we recommend you check it works with a pre-trained asset first. There is a trained neural image field included in the git repo. This model is quite large for this type of neural network: 8 layers and hidden size 320 and requires approximately 1M FLOPs per sample. MLPs used in neural real-time rendering on desktop GPUs typically have a FLOP rates less than 100K FLOPS per sample (this keeps models small enough that their weights can remain in cache for longer).
 
-MLPs used in neural real-time rendering on desktop GPUs typically have a FLOP rates less than 100K FLOPS per sample (this keeps models small enough that their weights can remain in cache for longer).
+The NIF network architecture is from this paper: [Towards Neural path Tracing in SRAM](https://arxiv.org/abs/2305.20061).
 
 ### Run the demo
 
