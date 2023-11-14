@@ -39,6 +39,7 @@ const std::vector<std::string> packetTypes {
     "hdr_packet",          // Packet containing a portion of the full uncompressed
                            // HDR image (server -> client).
     "interactive_samples", // New value for interactive samples per step
+    "ready",               // Used to sync with the other side once all other subscribers are ready (bi-directional)
 };
 
 // Struct and serialize function for HDR
@@ -168,6 +169,7 @@ class InterfaceServer {
                                       });
 
       ipu_utils::logger()->info("User interface server entering Tx/Rx loop.");
+      syncWithClient(*sender, receiver, "ready");
       serverReady = true;
       while (!stopServer && receiver.ok()) {
         std::this_thread::sleep_for(5ms);
