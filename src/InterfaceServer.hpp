@@ -198,7 +198,7 @@ public:
     float exposure = 0.f;
     float gamma = 2.2f;
     float fov = 90.f;
-    std::uint32_t interactiveSamples;
+    std::uint32_t interactiveSamples = 1;
     std::string newNif;
     bool stop = false;
     bool detach = false;

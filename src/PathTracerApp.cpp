@@ -604,6 +604,12 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
   // Setup remote user interface:
   std::unique_ptr<InterfaceServer> uiServer;
   InterfaceServer::State state;
+  state.exposure = configExposure;
+  state.gamma = configGamma;
+  state.fov = fieldOfView;
+  state.envRotationDegrees = degrees;
+  state.interactiveSamples = args.at("interactive-samples").as<std::uint32_t>();
+
   auto uiPort = args.at("ui-port").as<int>();
   if (uiPort) {
     uiServer.reset(new InterfaceServer(uiPort));
@@ -612,12 +618,6 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
     exposureTensor.connectWriteStream(engine, (void*)&uiServer->getState().exposure);
     gammaTensor.connectWriteStream(engine, (void*)&uiServer->getState().gamma);
   } else {
-    // If no remote UI attach set the UI state direct from the options/config:
-    state.exposure = configExposure;
-    state.gamma = configGamma;
-    state.fov = fieldOfView;
-    state.envRotationDegrees = degrees;
-    state.interactiveSamples = args.at("interactive-samples").as<std::uint32_t>();
     exposureTensor.connectWriteStream(engine, &state.exposure);
     gammaTensor.connectWriteStream(engine, &state.gamma);
   }
@@ -661,6 +661,7 @@ void PathTracerApp::execute(poplar::Engine& engine, const poplar::Device& device
         startTime = loopStartTime;
         step = 1;
         samplesPerIpuStep = state.interactiveSamples;
+        ipu_utils::logger()->debug("Interaction started setting samples per step to: {}", samplesPerIpuStep);
       }
     } else {
       if (step == sampleCountReversionStep) {
