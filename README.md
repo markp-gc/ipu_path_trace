@@ -56,13 +56,13 @@ The remote-UI runs on your local laptop or workstation. (The setup here will be 
 
 It has been tested on Ubuntu 18 and Mac OSX 11.6 it should be possible to build on other systems if you can satisfy the dependencies.
 
-Clone the repo (we need a specific commit here until a few things are fixed/unified):
+Clone the repo (we also checkout a known good commit here):
 
 ```
 git clone --recursive  https://github.com/markp-gc/remote_render_ui.git
 mkdir -p remote_render_ui/build
 cd remote_render_ui/build/
-git checkout e041807
+git checkout 3f1dc9a
 cmake -GNinja ..
 ninja -j100
 ```
